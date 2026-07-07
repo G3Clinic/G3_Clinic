@@ -1,0 +1,21 @@
+# Frontend
+node_modules/
+dist/
+.env
+*.local
+
+# Backend
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+backend/.env
+backend/venv/
+backend/env/
+*.sqlite3
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
