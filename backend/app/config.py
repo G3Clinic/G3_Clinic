@@ -8,12 +8,25 @@ o desenvolvimento simples continua funcionando sem subir o Postgres.
 import os
 
 
+def _normalizar_db_url(url: str) -> str:
+    """Compatibiliza a URL do Postgres com o SQLAlchemy 2.x + psycopg2.
+
+    Railway/Heroku às vezes entregam `postgres://` (esquema legado, rejeitado
+    pelo SQLAlchemy 2.x) ou `postgresql://` sem driver. Forçamos `postgresql+psycopg2://`.
+    """
+    if url.startswith("postgres://"):
+        url = "postgresql+psycopg2://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
+    return url
+
+
 class Settings:
     # Banco: Postgres em produção/Docker; SQLite como fallback de dev.
-    DATABASE_URL: str = os.getenv(
+    DATABASE_URL: str = _normalizar_db_url(os.getenv(
         "DATABASE_URL",
         "sqlite:///./clinica.sqlite3",
-    )
+    ))
 
     # JWT
     JWT_SECRET: str = os.getenv("JWT_SECRET", "troque-em-producao-por-um-segredo-forte")

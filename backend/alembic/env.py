@@ -12,12 +12,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.database import Base  # noqa: E402
 # importa TODOS os modelos para popular Base.metadata
 from app import models, clinica_models, tenant_models  # noqa: E402,F401
+from app.config import settings  # noqa: E402
 
 config = context.config
-config.set_main_option(
-    "sqlalchemy.url",
-    os.getenv("DATABASE_URL", "sqlite:///./clinica.sqlite3"),
-)
+# Usa a URL já normalizada (postgres:// -> postgresql+psycopg2://) do app,
+# para que o `alembic upgrade head` funcione igual à app no Railway/Heroku.
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
