@@ -18,4 +18,8 @@ backend/env/
 .DS_Store
 Thumbs.db
 .vscode/
+.claude/
 *.swp
+
+# Uploads gerados em runtime (não versionar arquivos enviados por usuários)
+backend/uploads/

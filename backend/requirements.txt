@@ -1,7 +1,15 @@
 fastapi
-uvicorn
+uvicorn[standard]
+gunicorn
 sqlalchemy
+alembic
 pydantic
+pydantic[email]
+email-validator
 pydantic-settings
 python-dotenv
 httpx
+psycopg2-binary
+python-jose[cryptography]
+bcrypt
+python-multipart

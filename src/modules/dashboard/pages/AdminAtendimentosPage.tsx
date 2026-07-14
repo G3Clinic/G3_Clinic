@@ -1,20 +1,76 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Stethoscope, Plus, Edit2, Trash2, Info, Save } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
+import { procedimentosApi, type APIProcedimento } from '../../../services/api';
 
-const TABS = ['consulta','procedimento','exame'] as const;
+const TABS = ['consulta', 'procedimento', 'exame'] as const;
 type TabType = typeof TABS[number];
 
-const MOCK_ATENDIMENTOS: any = { agendados: [], andamento: [], finalizados: [], cancelados: [] };
+type Form = { tipo: TabType; nome: string; duracao: string; valor: string };
+const FORM_VAZIO: Form = { tipo: 'consulta', nome: '', duracao: '', valor: '' };
 
 export function AdminAtendimentosPage() {
   const [tab, setTab] = useState<TabType>('consulta');
+  const [lista, setLista] = useState<APIProcedimento[]>([]);
+  const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [form, setForm] = useState<Form>(FORM_VAZIO);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  const setCampo = (c: keyof Form, v: string) => setForm(prev => ({ ...prev, [c]: v }));
+
+  const carregar = useCallback(() => {
+    setLoading(true);
+    procedimentosApi.listar().then(setLista)
+      .catch(e => console.error('Erro ao carregar atendimentos:', e))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const doTab = lista.filter(p => (p.tipo || 'consulta') === tab);
+
+  const abrirNovo = () => { setEditandoId(null); setForm({ ...FORM_VAZIO, tipo: tab }); setErro(''); setModal(true); };
+  const abrirEdicao = (p: APIProcedimento) => {
+    setEditandoId(p.id);
+    setForm({
+      tipo: (p.tipo as TabType) || 'consulta',
+      nome: p.nome,
+      duracao: p.duracao != null ? String(p.duracao) : '',
+      valor: p.valor_padrao != null ? String(p.valor_padrao) : '',
+    });
+    setErro(''); setModal(true);
+  };
+
+  const salvar = async () => {
+    setErro('');
+    if (!form.nome.trim()) { setErro('Nome é obrigatório.'); return; }
+    setSalvando(true);
+    try {
+      const payload = {
+        tipo: form.tipo, nome: form.nome.trim(),
+        duracao: form.duracao ? Number(form.duracao) : undefined,
+        valor_padrao: form.valor ? Number(form.valor) : undefined,
+      };
+      if (editandoId) await procedimentosApi.atualizar(editandoId, payload);
+      else await procedimentosApi.criar(payload);
+      setModal(false); carregar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Erro ao salvar atendimento.');
+    } finally { setSalvando(false); }
+  };
+
+  const excluir = async (p: APIProcedimento) => {
+    if (!confirm(`Excluir "${p.nome}"?`)) return;
+    try { await procedimentosApi.excluir(p.id); carregar(); }
+    catch (e) { alert(e instanceof Error ? e.message : 'Erro ao excluir.'); }
+  };
 
   return (
     <div className="space-y-5">
       <PageHeader icon={Stethoscope} title="Cadastrar Atendimentos" subtitle="Os atendimentos cadastrados ficam disponíveis na Agenda">
-        <Btn icon={Plus} onClick={() => setModal(true)}>Nova Consulta</Btn>
+        <Btn icon={Plus} onClick={abrirNovo}>Novo Atendimento</Btn>
       </PageHeader>
       <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl text-sm text-blue-700 flex gap-2 items-start">
         <Info size={18} className="shrink-0 mt-0.5" />
@@ -37,22 +93,26 @@ export function AdminAtendimentosPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                {['Nome','Duração (min)','Valor (R$)','Status','Ações'].map(h => (
+                {['Nome', 'Duração (min)', 'Valor (R$)', 'Status', 'Ações'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {MOCK_ATENDIMENTOS[tab].map(a => (
+              {loading ? (
+                <tr><td colSpan={5} className="text-center py-8 text-slate-500">Carregando...</td></tr>
+              ) : doTab.length === 0 ? (
+                <tr><td colSpan={5} className="text-center py-8 text-slate-500">Nenhum item nesta categoria.</td></tr>
+              ) : doTab.map(a => (
                 <tr key={a.id} className="hover:bg-slate-50 group">
                   <td className="px-4 py-3 font-medium text-slate-800">{a.nome}</td>
-                  <td className="px-4 py-3 text-slate-500">{a.duracao} min</td>
-                  <td className="px-4 py-3 text-slate-500 font-mono">R$ {a.valor.toFixed(2)}</td>
-                  <td className="px-4 py-3"><Badge color="green">{a.status}</Badge></td>
+                  <td className="px-4 py-3 text-slate-500">{a.duracao != null ? `${a.duracao} min` : '—'}</td>
+                  <td className="px-4 py-3 text-slate-500 font-mono">R$ {(a.valor_padrao ?? 0).toFixed(2)}</td>
+                  <td className="px-4 py-3"><Badge color={a.ativo === false ? 'gray' : 'green'}>{a.ativo === false ? 'Inativo' : 'Ativo'}</Badge></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-light rounded-lg"><Edit2 size={14}/></button>
-                      <button className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
+                      <button onClick={() => abrirEdicao(a)} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-light rounded-lg"><Edit2 size={14} /></button>
+                      <button onClick={() => excluir(a)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -62,22 +122,26 @@ export function AdminAtendimentosPage() {
         </div>
       </Card>
 
-      <Modal open={modal} onClose={() => setModal(false)} title="Novo Atendimento">
+      <Modal open={modal} onClose={() => setModal(false)} title={editandoId ? 'Editar Atendimento' : 'Novo Atendimento'}>
         <div className="space-y-4">
-          <SelectField label="Tipo" required>
-            <option>Consulta</option>
-            <option>Procedimento</option>
-            <option>Exame</option>
+          <SelectField label="Tipo" required value={form.tipo} onChange={e => setCampo('tipo', e.target.value)}>
+            <option value="consulta">Consulta</option>
+            <option value="procedimento">Procedimento</option>
+            <option value="exame">Exame</option>
           </SelectField>
-          <InputField label="Nome do Atendimento" required placeholder="Ex: Consulta Clínica Geral" />
+          <InputField label="Nome do Atendimento" required placeholder="Ex: Consulta Clínica Geral"
+            value={form.nome} onChange={e => setCampo('nome', e.target.value)} />
           <div className="grid grid-cols-2 gap-3">
-            <InputField label="Duração (minutos)" type="number" min={5} placeholder="30" />
-            <InputField label="Valor (R$)" type="number" step="0.01" placeholder="0.00" />
+            <InputField label="Duração (minutos)" type="number" min={5} placeholder="30"
+              value={form.duracao} onChange={e => setCampo('duracao', e.target.value)} />
+            <InputField label="Valor (R$)" type="number" step="0.01" placeholder="0.00"
+              value={form.valor} onChange={e => setCampo('valor', e.target.value)} />
           </div>
+          {erro && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{erro}</div>}
         </div>
         <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100">
           <Btn variant="secondary" onClick={() => setModal(false)}>Cancelar</Btn>
-          <Btn icon={Save}>Salvar</Btn>
+          <Btn icon={Save} onClick={salvar} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</Btn>
         </div>
       </Modal>
     </div>

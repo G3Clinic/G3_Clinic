@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginPage } from './modules/auth/pages/LoginPage';
 import { DashboardLayout } from './modules/dashboard/layouts/DashboardLayout';
 import { HomePage } from './modules/dashboard/pages/HomePage';
@@ -28,14 +30,28 @@ import { AdminBackupPage } from './modules/dashboard/pages/AdminBackupPage';
 import { AdminNotificacoesPage } from './modules/dashboard/pages/AdminNotificacoesPage';
 import { MeuPerfilPage } from './modules/dashboard/pages/MeuPerfilPage';
 
+/** Protege rotas: sem sessão → redireciona ao login. */
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-slate-400">
+        Carregando…
+      </div>
+    );
+  }
+  return user ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
 function App() {
   return (
+    <AuthProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
 
-        <Route path="/dashboard" element={<DashboardLayout />}>
+        <Route path="/dashboard" element={<RequireAuth><DashboardLayout /></RequireAuth>}>
           <Route index element={<HomePage />} />
           <Route path="perfil" element={<MeuPerfilPage />} />
           <Route path="pacientes" element={<PacientesPage />} />
@@ -67,6 +83,7 @@ function App() {
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
+    </AuthProvider>
   );
 }
 

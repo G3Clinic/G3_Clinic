@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { PageHeader, Card, Btn, Modal } from '../../../components/ui/shared';
+import React, { useState, useEffect } from 'react';
+import { PageHeader, Card, Btn, Modal, SelectField } from '../../../components/ui/shared';
 import { Activity, X, User, ClipboardList, CheckCircle, Calendar, FileText, MousePointer2 } from 'lucide-react';
-import './odontograma.css'; // New exact CSS file
+import {
+  especialidadesApi, odontoProcApi, pacientesApi, finalizarOrcamento,
+  type APIEspecialidade, type APIOdontoProc, type APIPaciente,
+} from '../../../services/api';
+import './odontograma.css';
 
-// Core Data
 const PERM_SUP = [18,17,16,15,14,13,12,11, 21,22,23,24,25,26,27,28];
 const PERM_INF = [48,47,46,45,44,43,42,41, 31,32,33,34,35,36,37,38];
 const DEC_SUP  = [55,54,53,52,51, 61,62,63,64,65];
@@ -17,70 +20,64 @@ const FACES = [
   { c: 'O', l: 'Oclusal',          css: 'center' }
 ];
 
-const ESPECIALIDADES = [
-  { id: 'esp1', nome: 'Cirurgia e Traumatologia Bucomaxilofacial', procs: [{ id: 'p1', nome_intervencao: 'Exodontia Simples', valor_base: 200.00 }, { id: 'p2', nome_intervencao: 'Exodontia Siso', valor_base: 450.00 }] },
-  { id: 'esp2', nome: 'Dentística', procs: [{ id: 'p3', nome_intervencao: 'Restauração Resina 1 Face', valor_base: 150.00 }, { id: 'p4', nome_intervencao: 'Clareamento Dental', valor_base: 800.00 }] },
-  { id: 'esp3', nome: 'Endodontia', procs: [{ id: 'p5', nome_intervencao: 'Tratamento de Canal', valor_base: 900.00 }] },
-  { id: 'esp4', nome: 'Estomatologia', procs: [{ id: 'p6', nome_intervencao: 'Biópsia', valor_base: 350.00 }] },
-  { id: 'esp5', nome: 'Frenectomia', procs: [{ id: 'p7', nome_intervencao: 'Frenectomia Labial', valor_base: 500.00 }] },
-  { id: 'esp6', nome: 'Implantodontia', procs: [{ id: 'p8', nome_intervencao: 'Implante Unitário', valor_base: 2500.00 }] },
-  { id: 'esp7', nome: 'Odontopediatria', procs: [{ id: 'p9', nome_intervencao: 'Aplicação de Flúor', valor_base: 80.00 }] },
-  { id: 'esp8', nome: 'Ortodontia', procs: [{ id: 'p10', nome_intervencao: 'Manutenção Aparelho Fixo', valor_base: 150.00 }] },
-  { id: 'esp9', nome: 'Periodontia', procs: [{ id: 'p11', nome_intervencao: 'Raspagem Supra Gengival', valor_base: 200.00 }] },
-  { id: 'esp10', nome: 'Prótese dentária', procs: [{ id: 'p12', nome_intervencao: 'Coroa de Porcelana', valor_base: 1200.00 }] }
-];
-
 export function OdontogramaPage() {
   const [denteSel, setDenteSel] = useState<number | null>(null);
   const [espSel, setEspSel] = useState<string | null>(null);
-  
   const [modalIntOpen, setModalIntOpen] = useState(false);
-  const [intAtual, setIntAtual] = useState<any>(null);
-  
+  const [intAtual, setIntAtual] = useState<APIOdontoProc | null>(null);
   const [facesSel, setFacesSel] = useState<string[]>([]);
-  
   const [itens, setItens] = useState<any[]>([]);
+  const [salvando, setSalvando] = useState(false);
 
-  const selecionarDente = (num: number) => {
-    setDenteSel(num);
-    setEspSel(null);
-  };
+  // dados reais
+  const [especialidades, setEspecialidades] = useState<APIEspecialidade[]>([]);
+  const [procs, setProcs] = useState<APIOdontoProc[]>([]);
+  const [pacientes, setPacientes] = useState<APIPaciente[]>([]);
+  const [pacienteId, setPacienteId] = useState<string>('');
 
-  const abrirModalIntervencao = (proc: any) => {
-    if (!denteSel) {
-      alert('Selecione um dente primeiro');
-      return;
-    }
-    setIntAtual(proc);
-    setFacesSel([]);
-    setModalIntOpen(true);
-  };
+  useEffect(() => {
+    especialidadesApi.listar().then(setEspecialidades).catch(() => {});
+    odontoProcApi.listar().then(setProcs).catch(() => {});
+    pacientesApi.listar().then(setPacientes).catch(() => {});
+  }, []);
 
-  const toggleFaceModal = (face: string) => {
-    setFacesSel(prev => prev.includes(face) ? prev.filter(f => f !== face) : [...prev, face]);
+  const paciente = pacientes.find(p => String(p.id) === pacienteId) || null;
+  const procsDaEsp = (espId: string) => procs.filter(p => p.especialidade_id === espId);
+  const getEspecialidadeInfo = () => especialidades.find(e => e.id === espSel);
+
+  const selecionarDente = (num: number) => { setDenteSel(num); setEspSel(null); };
+
+  const abrirModalIntervencao = (proc: APIOdontoProc) => {
+    if (!denteSel) { alert('Selecione um dente primeiro'); return; }
+    setIntAtual(proc); setFacesSel([]); setModalIntOpen(true);
   };
+  const toggleFaceModal = (face: string) => setFacesSel(prev => prev.includes(face) ? prev.filter(f => f !== face) : [...prev, face]);
 
   const gravarIntervencao = () => {
     if (!intAtual) return;
     setItens(prev => [...prev, {
-      id: Math.random().toString(),
-      dente: denteSel,
-      faces: facesSel,
-      proc: intAtual.nome_intervencao,
-      valor: intAtual.valor_base
+      id: Math.random().toString(), dente: denteSel, faces: facesSel,
+      proc: intAtual.nome_intervencao, valor: intAtual.valor_base || 0, procedimentoId: intAtual.id,
     }]);
-    setModalIntOpen(false);
-    setIntAtual(null);
-    setFacesSel([]);
+    setModalIntOpen(false); setIntAtual(null); setFacesSel([]);
   };
-
-  const removerItem = (id: string) => {
-    setItens(prev => prev.filter(i => i.id !== id));
-  };
-
+  const removerItem = (id: string) => setItens(prev => prev.filter(i => i.id !== id));
   const total = itens.reduce((acc, it) => acc + it.valor, 0);
 
-  const getEspecialidadeInfo = () => ESPECIALIDADES.find(e => e.id === espSel);
+  const finalizar = async () => {
+    if (!pacienteId) { alert('Selecione um paciente primeiro.'); return; }
+    if (itens.length === 0) return;
+    setSalvando(true);
+    try {
+      await finalizarOrcamento({
+        paciente_id: Number(pacienteId), valor_total: total,
+        itens: itens.map(it => ({ dente_numero: String(it.dente), faces: (it.faces || []).join(''), procedimento_id: it.procedimentoId, valor_cobrado: it.valor })),
+      });
+      alert('Orçamento finalizado! Um recebimento pendente foi gerado no financeiro.');
+      setItens([]); setDenteSel(null); setEspSel(null);
+    } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao salvar orçamento.'); }
+    finally { setSalvando(false); }
+  };
 
   const getMappedToothImage = (num: number, isDeciduo: boolean) => {
     if (!isDeciduo) return `/assets/images/toothImageFront${num}.png`;
@@ -141,11 +138,13 @@ export function OdontogramaPage() {
         subtitle="Selecione as faces do dente e lance no orçamento"
       >
         <div className="flex items-center gap-3">
-          <span className="text-sm font-bold text-brand-primary bg-brand-light px-3 py-1.5 rounded-lg border border-brand-primary/20">
-            Paciente: João da Silva
-          </span>
-          <Btn variant="secondary" icon={ClipboardList}>Anamnese</Btn>
-          <Btn icon={User}>Selecionar Paciente</Btn>
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+            <User size={16} className="text-brand-primary" />
+            <select value={pacienteId} onChange={e => setPacienteId(e.target.value)} className="text-sm font-bold text-brand-primary bg-transparent outline-none cursor-pointer">
+              <option value="">Selecionar paciente...</option>
+              {pacientes.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          </div>
         </div>
       </PageHeader>
 
@@ -209,15 +208,16 @@ export function OdontogramaPage() {
                 <div>
                   <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Especialidade</h4>
                   <div className="flex flex-wrap gap-2">
-                    {ESPECIALIDADES.map(esp => (
-                      <button 
-                        key={esp.id} 
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${espSel === esp.id ? 'bg-brand-primary text-white shadow-sm' : 'bg-gray-50 text-slate-600 hover:bg-gray-100 border border-gray-200'}`}
-                        onClick={() => setEspSel(esp.id)}
-                      >
-                        {esp.nome}
-                      </button>
-                    ))}
+                    {especialidades.length === 0 ? <span className="text-xs text-slate-400 italic">Cadastre especialidades em Administração → Especialidades Odonto.</span>
+                      : especialidades.map(esp => (
+                        <button
+                          key={esp.id}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${espSel === esp.id ? 'bg-brand-primary text-white shadow-sm' : 'bg-gray-50 text-slate-600 hover:bg-gray-100 border border-gray-200'}`}
+                          onClick={() => setEspSel(esp.id)}
+                        >
+                          {esp.nome}
+                        </button>
+                      ))}
                   </div>
                 </div>
 
@@ -225,12 +225,13 @@ export function OdontogramaPage() {
                   <div>
                     <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Intervenção</h4>
                     <div className="grid grid-cols-2 gap-2">
-                      {getEspecialidadeInfo()?.procs.map((inv: any) => (
-                        <button key={inv.id} className="flex flex-col items-start gap-1 p-2 rounded-lg border border-gray-200 hover:border-brand-primary hover:bg-brand-light/20 transition-all text-left group" onClick={() => abrirModalIntervencao(inv)}>
-                          <span className="text-[11px] leading-tight font-semibold text-slate-700 group-hover:text-brand-primary transition-colors">{inv.nome_intervencao}</span>
-                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">R$ {inv.valor_base.toFixed(2).replace('.',',')}</span>
-                        </button>
-                      ))}
+                      {procsDaEsp(espSel).length === 0 ? <span className="text-xs text-slate-400 italic col-span-2">Nenhuma intervenção nesta especialidade.</span>
+                        : procsDaEsp(espSel).map(inv => (
+                          <button key={inv.id} className="flex flex-col items-start gap-1 p-2 rounded-lg border border-gray-200 hover:border-brand-primary hover:bg-brand-light/20 transition-all text-left group" onClick={() => abrirModalIntervencao(inv)}>
+                            <span className="text-[11px] leading-tight font-semibold text-slate-700 group-hover:text-brand-primary transition-colors">{inv.nome_intervencao}</span>
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">R$ {(inv.valor_base || 0).toFixed(2).replace('.', ',')}</span>
+                          </button>
+                        ))}
                     </div>
                   </div>
                 )}
@@ -280,8 +281,8 @@ export function OdontogramaPage() {
             </div>
 
             <div className="lg:col-span-2">
-              <Btn className="w-full flex items-center justify-center gap-2 mt-1 shadow-md shadow-brand-primary/20" size="md" disabled={itens.length === 0}>
-                <CheckCircle size={18} /> Finalizar e Enviar
+              <Btn className="w-full flex items-center justify-center gap-2 mt-1 shadow-md shadow-brand-primary/20" size="md" disabled={itens.length === 0 || salvando} onClick={finalizar}>
+                <CheckCircle size={18} /> {salvando ? 'Salvando...' : 'Finalizar e Enviar'}
               </Btn>
             </div>
           </Card>
@@ -328,12 +329,12 @@ export function OdontogramaPage() {
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:18}}>
             <div className="patFG">
               <label className="afLabel">Valor Clínica (R$)</label>
-              <input type="number" className="afInp" readOnly value={intAtual.valor_base.toFixed(2)}
+              <input type="number" className="afInp" readOnly value={(intAtual.valor_base || 0).toFixed(2)}
                      style={{background:'var(--s1)',cursor:'not-allowed',color:'var(--s7)'}}/>
             </div>
             <div className="patFG">
               <label className="afLabel">Valor Paciente (R$)</label>
-              <input type="number" className="afInp" readOnly value={intAtual.valor_base.toFixed(2)}
+              <input type="number" className="afInp" readOnly value={(intAtual.valor_base || 0).toFixed(2)}
                      style={{background:'var(--s1)',cursor:'not-allowed',color:'var(--s7)'}}/>
             </div>
           </div>

@@ -1,34 +1,108 @@
-import { useState } from 'react';
-import { Bell, Menu, ChevronDown, User, LogOut, Settings, AlertTriangle, Info, Download, Upload, FileText, Building2, Lock, Camera } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bell, Menu, ChevronDown, User, LogOut, Settings, AlertTriangle, Info, CheckCircle, Building2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Modal, InputField, SelectField, Btn } from '../../../components/ui/shared';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useAuth } from '../../../contexts/AuthContext';
+import { notificacoesApi, filiaisApi, filialStore, type APINotificacao, type APIFilial } from '../../../services/api';
 
 interface TopbarProps {
   onOpenSidebar: () => void;
 }
 
-const MOCK_NOTIFICATIONS = [
-  { id: 1, type: 'alert', title: 'Paciente aguardando', message: 'João Silva está aguardando atendimento há 20 minutos.', time: 'Há 20 min', read: false },
-  { id: 2, type: 'system', title: 'Caixa do Dia', message: 'Lembre-se de fechar o caixa ao final do expediente.', time: 'Há 1 hora', read: false },
-  { id: 3, type: 'system', title: 'Backup realizado', message: 'Backup automático dos dados concluído com sucesso.', time: 'Há 3 horas', read: true },
-];
+// Tempo relativo em pt-BR ("Há 20 min", "Há 3 horas", "Ontem", ...)
+function tempoRelativo(iso?: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso).getTime();
+  if (Number.isNaN(d)) return '';
+  const seg = Math.floor((Date.now() - d) / 1000);
+  if (seg < 60) return 'Agora mesmo';
+  const min = Math.floor(seg / 60);
+  if (min < 60) return `Há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `Há ${h} ${h === 1 ? 'hora' : 'horas'}`;
+  const dias = Math.floor(h / 24);
+  if (dias === 1) return 'Ontem';
+  if (dias < 7) return `Há ${dias} dias`;
+  return new Date(iso).toLocaleDateString('pt-BR');
+}
 
 export function Topbar({ onOpenSidebar }: TopbarProps) {
   const navigate = useNavigate();
   const { theme } = useTheme();
+  const { user, logout } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<APINotificacao[]>([]);
+  const [loadingNotif, setLoadingNotif] = useState(false);
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // Unidades acessíveis ao usuário + seleção persistida (filialStore)
+  const [filiais, setFiliais] = useState<APIFilial[]>([]);
+  const [unidadeAtiva, setUnidadeAtiva] = useState<string>(() => filialStore.get() || '');
 
-  const markAllAsRead = () => setNotifications(notifications.map(n => ({ ...n, read: true })));
+  const unreadCount = notifications.filter(n => !n.lida).length;
+
+  const carregarNotificacoes = () => {
+    setLoadingNotif(true);
+    notificacoesApi.listar()
+      .then(data => setNotifications(
+        [...data].sort((a, b) => new Date(b.criado_em || 0).getTime() - new Date(a.criado_em || 0).getTime())
+      ))
+      .catch(() => setNotifications([]))   // 403 (não-admin) / offline → sem notificações
+      .finally(() => setLoadingNotif(false));
+  };
+
+  useEffect(() => { carregarNotificacoes(); }, []);
+
+  useEffect(() => {
+    filiaisApi.listar()
+      .then(todas => {
+        // Dono/administrador veem todas as filiais; demais, apenas as que
+        // têm vínculo (user.filiais) — assim podem alternar sem novo login.
+        const acessiveis = (user?.is_dono || user?.role === 'administrador')
+          ? todas
+          : todas.filter(f => (user?.filiais || []).some(uf => uf.unidade_id === f.id));
+        setFiliais(acessiveis);
+
+        // Garante uma seleção válida e sincroniza o filialStore (usado no header).
+        const atual = filialStore.get() || '';
+        const valida = atual && acessiveis.some(f => String(f.id) === atual)
+          ? atual
+          : (acessiveis[0] ? String(acessiveis[0].id) : '');
+        setUnidadeAtiva(valida);
+        if (valida) filialStore.set(valida); else filialStore.clear();
+      })
+      .catch(() => setFiliais([]));
+  }, [user]);
+
+  const trocarUnidade = (id: string) => {
+    if (!id || id === unidadeAtiva) return;
+    filialStore.set(id);
+    // Recarrega para que todas as telas refaçam as buscas com a nova filial
+    // no header X-Filial-Id. A sessão (token) é preservada — sem novo login.
+    window.location.reload();
+  };
+
+  const markAllAsRead = async () => {
+    const naoLidas = notifications.filter(n => !n.lida);
+    setNotifications(prev => prev.map(n => ({ ...n, lida: true })));  // otimista
+    try {
+      await Promise.all(naoLidas.map(n => notificacoesApi.atualizar(n.id, { lida: true })));
+    } catch {
+      carregarNotificacoes();  // reverte para o estado real do servidor em caso de erro
+    }
+  };
+
+  // Dados do usuário logado (com fallbacks)
+  const nome = user?.nome || 'Usuário';
+  const iniciais = nome.split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase() || 'U';
+  const papel = user?.is_dono ? 'Dono' : (user?.role || 'Funcionário');
 
   const handleLogout = () => {
     setShowUserMenu(false);
+    logout();
     navigate('/login');
   };
 
@@ -53,18 +127,21 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
         </div>
       </div>
 
-      {/* Legacy Utilities: Unit Bar & Actions */}
+      {/* Seleção de unidade (filiais reais da empresa) */}
       <div className="hidden lg:flex items-center gap-3 ml-8 mr-auto">
-        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg">
-          <Building2 size={16} className="text-slate-500" />
-          <span className="text-xs font-semibold text-slate-600">Unidade:</span>
-          <select className="bg-transparent text-sm font-bold text-brand-primary outline-none cursor-pointer">
-            <option>Matriz - Centro</option>
-            <option>Filial - Zona Sul</option>
-            <option>Filial - Zona Norte</option>
-          </select>
-        </div>
-        
+        {filiais.length > 0 && (
+          <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-lg">
+            <Building2 size={16} className="text-slate-500" />
+            <span className="text-xs font-semibold text-slate-600">Unidade:</span>
+            <select
+              value={unidadeAtiva}
+              onChange={e => trocarUnidade(e.target.value)}
+              className="bg-transparent text-sm font-bold text-brand-primary outline-none cursor-pointer"
+            >
+              {filiais.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
@@ -92,19 +169,35 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
                 )}
               </div>
               <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
-                {notifications.map(notif => (
-                  <div key={notif.id} className={`p-4 flex gap-3 hover:bg-gray-50 transition-colors ${notif.read ? 'opacity-60' : ''}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm ${notif.type === 'alert' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-                      {notif.type === 'alert' ? <AlertTriangle size={16} /> : <Info size={16} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-semibold ${notif.read ? 'text-slate-500' : 'text-slate-800'}`}>{notif.title}</p>
-                      <p className="text-xs text-slate-500 leading-relaxed mt-0.5">{notif.message}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">{notif.time}</p>
-                    </div>
-                    {!notif.read && <span className="w-2 h-2 bg-brand-primary rounded-full shrink-0 mt-2" />}
+                {loadingNotif ? (
+                  <div className="p-8 text-center text-sm text-slate-400">Carregando...</div>
+                ) : notifications.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <Bell size={28} className="text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm text-slate-400">Nenhuma notificação</p>
                   </div>
-                ))}
+                ) : notifications.map(notif => {
+                  const tipo = notif.tipo || 'info';
+                  const estilo = tipo === 'error' || tipo === 'warning'
+                    ? { bg: 'bg-orange-100 text-orange-600', Icon: AlertTriangle }
+                    : tipo === 'success'
+                      ? { bg: 'bg-emerald-100 text-emerald-600', Icon: CheckCircle }
+                      : { bg: 'bg-blue-100 text-blue-600', Icon: Info };
+                  const Icon = estilo.Icon;
+                  return (
+                    <div key={notif.id} className={`p-4 flex gap-3 hover:bg-gray-50 transition-colors ${notif.lida ? 'opacity-60' : ''}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm ${estilo.bg}`}>
+                        <Icon size={16} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold ${notif.lida ? 'text-slate-500' : 'text-slate-800'}`}>{notif.titulo}</p>
+                        {notif.mensagem && <p className="text-xs text-slate-500 leading-relaxed mt-0.5">{notif.mensagem}</p>}
+                        <p className="text-[10px] text-slate-400 mt-1">{tempoRelativo(notif.criado_em)}</p>
+                      </div>
+                      {!notif.lida && <span className="w-2 h-2 bg-brand-primary rounded-full shrink-0 mt-2" />}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -119,11 +212,11 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
             className="flex items-center gap-2.5 p-1.5 pr-2.5 rounded-xl hover:bg-gray-100 transition-colors"
           >
             <div className="w-8 h-8 bg-brand-primary text-white rounded-lg flex items-center justify-center font-bold text-sm shadow">
-              DR
+              {iniciais}
             </div>
             <div className="hidden md:block text-left">
-              <p className="text-sm font-semibold text-slate-700 leading-tight">Dr. Responsável</p>
-              <p className="text-[10px] text-slate-400 uppercase tracking-wide">Administrador</p>
+              <p className="text-sm font-semibold text-slate-700 leading-tight">{nome}</p>
+              <p className="text-[10px] text-slate-400 uppercase tracking-wide">{papel}</p>
             </div>
             <ChevronDown size={14} className={`text-slate-400 transition-transform hidden md:block ${showUserMenu ? 'rotate-180' : ''}`} />
           </button>
@@ -131,8 +224,8 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
           {showUserMenu && (
             <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-100 rounded-2xl shadow-xl z-50 overflow-hidden animate-fade-in-up">
               <div className="p-3 border-b border-gray-50">
-                <p className="text-sm font-semibold text-slate-800">Dr. Responsável</p>
-                <p className="text-xs text-slate-500">admin@clinica.com</p>
+                <p className="text-sm font-semibold text-slate-800">{nome}</p>
+                <p className="text-xs text-slate-500">{user?.email || ''}</p>
               </div>
               <div className="p-2">
                 <button 
@@ -178,9 +271,9 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
                 <option>45 minutos</option>
                 <option>1 hora</option>
               </SelectField>
-              <SelectField label="Unidade Principal">
-                <option selected>Matriz - Centro</option>
-                <option>Filial - Zona Sul</option>
+              <SelectField label="Unidade Principal" value={unidadeAtiva} onChange={e => trocarUnidade(e.target.value)}>
+                {filiais.length === 0 && <option value="">Nenhuma unidade</option>}
+                {filiais.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
               </SelectField>
               <InputField label="Alerta de Estoque Mínimo" defaultValue="10" type="number" />
             </div>

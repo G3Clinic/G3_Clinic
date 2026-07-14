@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Palette, Save, Image as ImageIcon, UploadCloud, RefreshCcw } from 'lucide-react';
 import { PageHeader, Card, Btn, InputField } from '../../../components/ui/shared';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { uploadArquivo, configApi } from '../../../services/api';
 
 export function AdminIdentidadePage() {
   const { theme, updateTheme } = useTheme();
@@ -14,42 +15,48 @@ export function AdminIdentidadePage() {
   const [companyName, setCompanyName] = useState(theme.companyName);
 
   const [isUploading, setIsUploading] = useState(false);
+  // Sinaliza quando a URL salva aponta para um arquivo que não carrega.
+  const [logoFullBroken, setLogoFullBroken] = useState(false);
+  const [logoIconBroken, setLogoIconBroken] = useState(false);
 
   const fileInputFullRef = useRef<HTMLInputElement>(null);
   const fileInputIconRef = useRef<HTMLInputElement>(null);
 
+  // Carrega o tema salvo no backend (por empresa), se houver
+  useEffect(() => {
+    configApi.obter('tema').then((t: any) => {
+      if (!t) return;
+      if (t.primaryColor) setPrimaryColor(t.primaryColor);
+      if (t.sidebarColor) setSidebarColor(t.sidebarColor);
+      if (t.topbarColor) setTopbarColor(t.topbarColor);
+      if (t.logoFullUrl) setLogoFullUrl(t.logoFullUrl);
+      if (t.logoIconUrl) setLogoIconUrl(t.logoIconUrl);
+      if (t.companyName) setCompanyName(t.companyName);
+      updateTheme(t);
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleFileUpload = async (file: File, type: 'full' | 'icon') => {
     setIsUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
-      const res = await fetch('http://localhost:8000/upload', {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json();
+      const data = await uploadArquivo(file);
       if (data.url) {
-        if (type === 'full') setLogoFullUrl(data.url);
-        if (type === 'icon') setLogoIconUrl(data.url);
+        if (type === 'full') { setLogoFullUrl(data.url); setLogoFullBroken(false); }
+        if (type === 'icon') { setLogoIconUrl(data.url); setLogoIconBroken(false); }
       }
     } catch (error) {
       console.error("Erro ao enviar imagem:", error);
-      alert("Erro ao enviar imagem. Verifique se o backend está rodando na porta 8000.");
+      alert("Erro ao enviar imagem. Verifique se o backend está rodando.");
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleSave = () => {
-    updateTheme({
-      primaryColor,
-      sidebarColor,
-      topbarColor,
-      logoFullUrl,
-      logoIconUrl,
-      companyName
-    });
+  const handleSave = async () => {
+    const tema = { primaryColor, sidebarColor, topbarColor, logoFullUrl, logoIconUrl, companyName };
+    updateTheme(tema);
+    try { await configApi.salvar('tema', tema); } catch { /* mantém local se falhar */ }
     alert('Identidade visual atualizada com sucesso!');
   };
 
@@ -88,8 +95,10 @@ export function AdminIdentidadePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col items-center justify-center relative min-h-[140px]">
-            {logoFullUrl ? (
-              <img src={logoFullUrl} alt="Logo Completa" className="h-12 object-contain mb-4" />
+            {logoFullUrl && !logoFullBroken ? (
+              <img src={logoFullUrl} alt="Logo Completa" className="h-12 object-contain mb-4" onError={() => setLogoFullBroken(true)} />
+            ) : logoFullBroken ? (
+              <div className="w-full max-w-[160px] h-12 bg-amber-50 border border-amber-200 rounded mb-4 flex items-center justify-center text-[11px] text-amber-700 text-center px-2">Imagem não encontrada — envie novamente</div>
             ) : (
               <div className="w-16 h-12 bg-gray-200 rounded mb-4 flex items-center justify-center text-xs text-slate-400">Sem Imagem</div>
             )}
@@ -107,8 +116,10 @@ export function AdminIdentidadePage() {
           </div>
 
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 flex flex-col items-center justify-center relative min-h-[140px]">
-            {logoIconUrl ? (
-              <img src={logoIconUrl} alt="Ícone da Logo" className="w-12 h-12 object-contain mb-4" />
+            {logoIconUrl && !logoIconBroken ? (
+              <img src={logoIconUrl} alt="Ícone da Logo" className="w-12 h-12 object-contain mb-4" onError={() => setLogoIconBroken(true)} />
+            ) : logoIconBroken ? (
+              <div className="w-12 h-12 bg-amber-50 border border-amber-200 rounded-lg mb-4 flex items-center justify-center text-[9px] text-amber-700 text-center px-1">Reenvie</div>
             ) : (
               <div className="w-12 h-12 bg-gray-200 rounded-lg mb-4 flex items-center justify-center text-xs text-slate-400">Sem Ícone</div>
             )}

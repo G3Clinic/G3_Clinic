@@ -1,4 +1,53 @@
-# G3 Clínica — Sistema de Gestão Clínica
+# G3 Clínica — Plataforma SaaS de Gestão Clínica
+
+Plataforma **multi-tenant** de gestão para clínicas médicas e odontológicas.
+Frontend React (Vite + Tailwind) e backend FastAPI (Python), pronta para escalar com Docker + PostgreSQL.
+
+## 🏢 Arquitetura multi-tenant (SaaS)
+
+```
+Empresa (cliente SaaS)
+  ├── Filial (unidade) 1 ── funcionários ── [módulos permitidos por filial]
+  ├── Filial (unidade) 2 ── funcionários ── [módulos permitidos por filial]
+  └── Dados compartilhados na empresa: pacientes, convênios, procedimentos...
+```
+
+- **Isolamento por linha (`empresa_id`)**: cada requisição é escopada pela empresa do token JWT — um tenant nunca vê dados de outro.
+- **Dados compartilhados entre filiais**: pacientes, convênios e procedimentos são escopo da empresa (todas as filiais enxergam).
+- **RBAC no banco**: o dono/admin delega, por funcionário e por filial, **quais módulos** ele acessa (estoque, agenda, financeiro, etc.). Não é mais constante no código.
+- **Dono** (`is_dono`) e papel `administrador` têm acesso total dentro da empresa.
+
+### Autenticação e delegação
+
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| POST | `/auth/register` | Cria empresa + filial matriz + usuário dono (retorna JWT) |
+| POST | `/auth/login` | Login por e-mail/senha (retorna JWT) |
+| GET | `/auth/me` | Perfil + filiais + permissões do usuário logado |
+| GET | `/admin/modulos` | Lista módulos do sistema |
+| POST | `/admin/usuarios` | Cria funcionário na empresa |
+| POST | `/admin/usuarios/{id}/filiais` | Vincula funcionário a uma filial |
+| POST | `/admin/usuarios/{id}/permissoes` | Define quais módulos o funcionário acessa numa filial |
+
+Todas as rotas `/api/*` exigem `Authorization: Bearer <token>`. Envie `X-Filial-Id: <id>` para escopar a permissão de módulo à filial ativa.
+
+## 🐳 Rodar com Docker (recomendado — PostgreSQL, escalável)
+
+```bash
+cp .env.docker.example .env      # ajuste senhas e JWT_SECRET
+docker compose up --build        # sobe postgres + backend + frontend
+# Frontend:  http://localhost:8080
+# Backend:   http://localhost:8000  (Swagger em /docs)
+
+# Escalar o backend horizontalmente:
+docker compose up --scale backend=3
+```
+
+Em produção, ponha um proxy/balanceador (nginx/traefik) na frente do serviço `backend`.
+
+---
+
+## 🧩 Sobre (stack)
 
 Sistema de gestão para clínicas médicas e odontológicas com frontend React (Vite + Tailwind) e backend FastAPI (Python).
 

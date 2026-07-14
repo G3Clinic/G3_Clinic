@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Calendar, MonitorPlay, ClipboardList, Smile,
-  Landmark, Package, BarChart2, DollarSign, ArrowRight, HeartPulse, Info
+  Landmark, Package, BarChart2, DollarSign, ArrowRight, HeartPulse
 } from 'lucide-react';
+import { useAuth } from '../../../contexts/AuthContext';
+import { agendamentosApi, pacientesApi } from '../../../services/api';
 
 const modules = [
   { icon: Users, label: 'Cadastro de Pacientes', sub: 'Gerenciar pacientes', color: 'text-blue-600', to: '/dashboard/pacientes' },
@@ -18,8 +21,26 @@ const modules = [
 
 export function HomePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+  const primeiroNome = (user?.nome_social || user?.nome || '').split(' ')[0] || 'Usuário';
+
+  const [totalPacientes, setTotalPacientes] = useState(0);
+  const [consultasHoje, setConsultasHoje] = useState(0);
+  const [emAtendimento, setEmAtendimento] = useState(0);
+  const [finalizados, setFinalizados] = useState(0);
+
+  useEffect(() => {
+    const hoje = new Date().toISOString().slice(0, 10);
+    pacientesApi.listar().then(ps => setTotalPacientes(ps.length)).catch(() => {});
+    agendamentosApi.listar().then(ags => {
+      const doDia = ags.filter(a => a.data_agendamento === hoje);
+      setConsultasHoje(doDia.length);
+      setEmAtendimento(doDia.filter(a => a.status === 'Em Atendimento').length);
+      setFinalizados(doDia.filter(a => a.status === 'Finalizado').length);
+    }).catch(() => {});
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -29,7 +50,7 @@ export function HomePage() {
           <HeartPulse size={22} className="opacity-80" />
           <span className="text-sm font-medium opacity-80">Sistema de Gestão</span>
         </div>
-        <h2 className="text-2xl font-bold">{greeting}, Dr. Responsável!</h2>
+        <h2 className="text-2xl font-bold">{greeting}, {primeiroNome}!</h2>
         <p className="text-blue-100 text-sm mt-1">
           Use o menu lateral ou os atalhos abaixo para navegar entre os módulos do sistema.
         </p>
@@ -38,10 +59,10 @@ export function HomePage() {
       {/* Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Consultas Hoje', value: '—', color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Em Atendimento', value: '—', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Finalizados', value: '—', color: 'text-violet-600', bg: 'bg-violet-50' },
-          { label: 'Pacientes Cad.', value: '—', color: 'text-amber-600', bg: 'bg-amber-50' },
+          { label: 'Consultas Hoje', value: String(consultasHoje), color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'Em Atendimento', value: String(emAtendimento), color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Finalizados', value: String(finalizados), color: 'text-violet-600', bg: 'bg-violet-50' },
+          { label: 'Pacientes Cad.', value: String(totalPacientes), color: 'text-amber-600', bg: 'bg-amber-50' },
         ].map(stat => (
           <div key={stat.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{stat.label}</p>

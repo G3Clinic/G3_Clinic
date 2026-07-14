@@ -1,43 +1,46 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 import { Activity, Users, ArrowLeft, HeartPulse, UserCircle } from 'lucide-react';
 import { PageHeader, Card, Btn } from '../../../components/ui/shared';
 import { useNavigate } from 'react-router-dom';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-
-// Mock Data
-const kpis = {
-  totalPacientes: 156,
-  idadeMedia: 34,
-  mulheres: 60,
-  homens: 40
-};
-
-const dataProcs = [
-  { name: 'Limpeza/Profilaxia', qtd: 450 },
-  { name: 'Restauração', qtd: 320 },
-  { name: 'Extração', qtd: 150 },
-  { name: 'Canal', qtd: 90 },
-  { name: 'Implante', qtd: 40 },
-];
-
-const dataCIDs = [
-  { name: 'K02 - Cárie', qtd: 210 },
-  { name: 'K04 - Polpa', qtd: 85 },
-  { name: 'K05 - Gengivite', qtd: 120 },
-  { name: 'K08 - Outros', qtd: 45 },
-];
-
-const dataMedicos = [
-  { name: 'Dr. João (Implantes)', qtd: 340 },
-  { name: 'Dra. Maria (Orto)', qtd: 280 },
-  { name: 'Dr. Pedro (Clínico)', qtd: 215 },
-  { name: 'Dra. Ana (Odontopediatria)', qtd: 150 },
-];
+import { pacientesApi, agendamentosApi, procedimentosApi, usuariosApi, type APIAgendamento } from '../../../services/api';
 
 export function EstatisticasPacientesPage() {
   const navigate = useNavigate();
+
+  const [kpis, setKpis] = useState({ totalPacientes: 0, idadeMedia: 0, mulheres: 0, homens: 0 });
+  const [dataProcs, setDataProcs] = useState<{ name: string; qtd: number }[]>([]);
+  const [dataMedicos, setDataMedicos] = useState<{ name: string; qtd: number }[]>([]);
+  const [dataCIDs, setDataCIDs] = useState<{ name: string; qtd: number }[]>([]);
+
+  useEffect(() => {
+    Promise.all([pacientesApi.listar(), agendamentosApi.listar(), procedimentosApi.listar(), usuariosApi.listar()])
+      .then(([pacs, ags, procs, users]) => {
+        // KPIs demográficos
+        const total = pacs.length;
+        const idades = pacs.map(p => p.data_nascimento ? (new Date().getFullYear() - new Date(p.data_nascimento).getFullYear()) : null).filter((x): x is number => x != null);
+        const idadeMedia = idades.length ? Math.round(idades.reduce((a, b) => a + b, 0) / idades.length) : 0;
+        const fem = pacs.filter(p => p.sexo === 'F').length;
+        const masc = pacs.filter(p => p.sexo === 'M').length;
+        const base = fem + masc || 1;
+        setKpis({ totalPacientes: total, idadeMedia, mulheres: Math.round((fem / base) * 100), homens: Math.round((masc / base) * 100) });
+
+        // agrega por procedimento e por profissional
+        const nomeProc = (id?: string | null) => procs.find(p => p.id === id)?.nome || '—';
+        const nomeMed = (id?: string | null) => users.find(u => u.id === id)?.nome || '—';
+        const contar = (arr: APIAgendamento[], chave: (a: APIAgendamento) => string | null | undefined, rotulo: (id: string) => string) => {
+          const m: Record<string, number> = {};
+          arr.forEach(a => { const k = chave(a); if (k) m[k] = (m[k] || 0) + 1; });
+          return Object.entries(m).map(([id, qtd]) => ({ name: rotulo(id), qtd })).sort((a, b) => b.qtd - a.qtd).slice(0, 6);
+        };
+        setDataProcs(contar(ags, a => a.procedimento_id, nomeProc));
+        setDataMedicos(contar(ags, a => a.profissional_id, nomeMed));
+        setDataCIDs([]); // CID por paciente não é agregável sem carregar todas as consultas
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="space-y-6">

@@ -110,6 +110,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { theme } = useTheme();
   const navigate = useNavigate();
 
+  // Se a logo salva apontar para um arquivo inexistente/quebrado, caímos no
+  // branding padrão em vez de mostrar o ícone de imagem quebrada.
+  const [logoFullBroken, setLogoFullBroken] = useState(false);
+  const [logoIconBroken, setLogoIconBroken] = useState(false);
+  const showLogoFull = !!theme.logoFullUrl && !logoFullBroken;
+  const showLogoIcon = !!theme.logoIconUrl && !logoIconBroken;
+
   const toggleCollapse = () => {
     setIsCollapsed(prev => {
       const next = !prev;
@@ -139,15 +146,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         {/* Logo */}
         <div className={clsx("h-16 flex items-center px-5 border-b border-gray-100", isCollapsed ? "justify-center" : "justify-between")}>
           <div className="flex items-center gap-2.5 overflow-hidden">
-            {!isCollapsed && theme.logoFullUrl ? (
+            {!isCollapsed && showLogoFull ? (
               <div className="h-8 flex items-center justify-center">
-                <img src={theme.logoFullUrl} alt="Logo" className="h-full w-auto object-contain" />
+                <img src={theme.logoFullUrl} alt="Logo" className="h-full w-auto object-contain" onError={() => setLogoFullBroken(true)} />
               </div>
             ) : (
               <>
-                <div className={clsx("w-8 h-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden", !theme.logoIconUrl && "bg-brand-primary shadow-md shadow-brand-primary/30")}>
-                  {theme.logoIconUrl ? (
-                    <img src={theme.logoIconUrl} alt="Icon" className="w-full h-full object-contain" />
+                <div className={clsx("w-8 h-8 rounded-lg flex items-center justify-center shrink-0 overflow-hidden", !showLogoIcon && "bg-brand-primary shadow-md shadow-brand-primary/30")}>
+                  {showLogoIcon ? (
+                    <img src={theme.logoIconUrl} alt="Icon" className="w-full h-full object-contain" onError={() => setLogoIconBroken(true)} />
                   ) : (
                     <HeartPulse size={18} className="text-white" />
                   )}

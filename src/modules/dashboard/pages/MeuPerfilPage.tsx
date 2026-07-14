@@ -1,128 +1,149 @@
-import React, { useState } from 'react';
-import { User, Calendar, Camera, Trash2, Save, KeyRound, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { User, Camera, Save, KeyRound, AlertTriangle } from 'lucide-react';
 import { PageHeader, Card, Btn, InputField, SelectField, Modal } from '../../../components/ui/shared';
+import { useAuth } from '../../../contexts/AuthContext';
+import { authApi, uploadArquivo } from '../../../services/api';
+import { formatarCpf, cpfValido } from '../../../utils/cpf';
 
 export function MeuPerfilPage() {
+  const { user, refresh } = useAuth();
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+
+  const [form, setForm] = useState({
+    nome: '', nome_social: '', cpf: '', telefone: '', email: '', sexo: '', data_nascimento: '',
+    conselho_tipo: 'CRM', conselho_numero: '', conselho_uf: 'BA', foto_url: '' as string | undefined,
+  });
+  const set = (c: keyof typeof form, v: string) => setForm(prev => ({ ...prev, [c]: v }));
+
+  const [senhaAtual, setSenhaAtual] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [confSenha, setConfSenha] = useState('');
+  const [erroSenha, setErroSenha] = useState('');
+
+  useEffect(() => {
+    if (!user) return;
+    setForm({
+      nome: user.nome || '', nome_social: user.nome_social || '', cpf: user.cpf || '', telefone: user.telefone || '',
+      email: user.email || '', sexo: user.sexo || '', data_nascimento: user.data_nascimento || '',
+      conselho_tipo: user.conselho_tipo || 'CRM', conselho_numero: user.conselho_numero || '',
+      conselho_uf: user.conselho_uf || 'BA', foto_url: user.foto_url || '',
+    });
+  }, [user]);
+
+  const salvar = async () => {
+    if (form.cpf.trim() && !cpfValido(form.cpf)) {
+      alert('CPF inválido — verifique os dígitos.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      await authApi.atualizarPerfil({
+        nome: form.nome, nome_social: form.nome_social || null, cpf: form.cpf.replace(/\D/g, '') || null, telefone: form.telefone || null,
+        email: form.email, sexo: form.sexo || null, data_nascimento: form.data_nascimento || null,
+        conselho_tipo: form.conselho_tipo, conselho_numero: form.conselho_numero || null, conselho_uf: form.conselho_uf,
+        foto_url: form.foto_url || null,
+      } as any);
+      await refresh();
+      alert('Perfil atualizado com sucesso!');
+    } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao salvar.'); }
+    finally { setSalvando(false); }
+  };
+
+  const alterarFoto = async (file: File) => {
+    try { const { url } = await uploadArquivo(file); set('foto_url', url); }
+    catch { alert('Erro ao enviar foto.'); }
+  };
+
+  const salvarSenha = async () => {
+    setErroSenha('');
+    if (novaSenha.length < 6) { setErroSenha('Mínimo 6 caracteres.'); return; }
+    if (novaSenha !== confSenha) { setErroSenha('As senhas não coincidem.'); return; }
+    try {
+      await authApi.trocarSenha(novaSenha, senhaAtual || undefined);
+      setPasswordModalOpen(false); setSenhaAtual(''); setNovaSenha(''); setConfSenha('');
+      alert('Senha alterada com sucesso!');
+    } catch (e) { setErroSenha(e instanceof Error ? e.message : 'Erro.'); }
+  };
+
+  const inicial = (form.nome || 'U').charAt(0).toUpperCase();
+  const labelRole = user?.is_dono ? 'Dono' : (user?.role || 'Funcionário');
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader icon={User} title="Meu Perfil" subtitle="Gerencie suas informações pessoais e credenciais" />
 
-      {/* Foto de Perfil */}
       <Card>
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
           <div className="relative group">
             <div className="w-24 h-24 bg-brand-light rounded-full flex items-center justify-center text-brand-primary text-3xl font-bold border-4 border-white shadow-md overflow-hidden">
-              <span className="group-hover:opacity-0 transition-opacity">A</span>
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                <Camera size={24} className="text-white" />
-              </div>
+              {form.foto_url ? <img src={form.foto_url} alt="Foto" className="w-full h-full object-cover" /> : <span>{inicial}</span>}
             </div>
           </div>
           <div className="flex-1 space-y-3">
             <div>
-              <h3 className="text-lg font-bold text-slate-800">Administrador</h3>
-              <p className="text-sm text-slate-500 font-medium">Administrador</p>
+              <h3 className="text-lg font-bold text-slate-800">{form.nome || 'Usuário'}</h3>
+              <p className="text-sm text-slate-500 font-medium capitalize">{labelRole}</p>
             </div>
-            <div className="flex gap-3">
-              <Btn size="sm" variant="outline" icon={Camera}>Alterar foto</Btn>
-              <Btn size="sm" variant="ghost" icon={Trash2} className="text-red-500 hover:bg-red-50 hover:text-red-600 border-0">Remover foto</Btn>
-            </div>
+            <label className="inline-flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm font-medium cursor-pointer hover:bg-gray-50 transition-colors w-fit">
+              <Camera size={15} /> Alterar foto
+              <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files && alterarFoto(e.target.files[0])} />
+            </label>
           </div>
         </div>
       </Card>
 
-      {/* Google Agenda */}
-      <Card>
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-white border border-gray-100 flex items-center justify-center shrink-0 shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="24" height="24">
-              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-            </svg>
-          </div>
-          <div className="flex-1">
-            <h4 className="font-bold text-slate-800 mb-1">Google Agenda</h4>
-            <p className="text-sm text-slate-500 mb-4">Conecte para que os agendamentos da clínica apareçam na sua Google Agenda.</p>
-            <Btn variant="outline" className="border-gray-200 text-slate-700 hover:bg-gray-50 font-semibold gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="18" height="18">
-                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-              </svg>
-              Conectar com o Google
-            </Btn>
-          </div>
-        </div>
-      </Card>
-
-      {/* Dados Pessoais */}
       <Card>
         <h4 className="font-bold text-slate-800 border-b border-gray-100 pb-3 mb-5">Dados pessoais</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <InputField label="Nome completo" defaultValue="Administrador" required />
-          <InputField label="Nome social" placeholder="Como prefere ser chamado" />
-          <InputField label="Celular" defaultValue="(00) 00000-0000" />
-          <InputField label="E-mail" defaultValue="admin@diligens.med" />
-          <SelectField label="Sexo">
-            <option>Masculino</option>
-            <option>Feminino</option>
-            <option>Outro</option>
-            <option>Prefiro não informar</option>
+          <InputField label="Nome completo" required value={form.nome} onChange={e => set('nome', e.target.value)} />
+          <InputField label="Nome social" placeholder="Como prefere ser chamado" value={form.nome_social} onChange={e => set('nome_social', e.target.value)} />
+          <InputField label="CPF" placeholder="000.000.000-00" maxLength={14} value={form.cpf} onChange={e => set('cpf', formatarCpf(e.target.value))} />
+          <InputField label="Celular" placeholder="(00) 00000-0000" value={form.telefone} onChange={e => set('telefone', e.target.value)} />
+          <InputField label="E-mail" value={form.email} onChange={e => set('email', e.target.value)} />
+          <SelectField label="Sexo" value={form.sexo} onChange={e => set('sexo', e.target.value)}>
+            <option value="">Selecione...</option><option>Masculino</option><option>Feminino</option><option>Outro</option><option>Prefiro não informar</option>
           </SelectField>
-          <InputField label="Data de nascimento" type="date" defaultValue="1985-05-20" />
+          <InputField label="Data de nascimento" type="date" value={form.data_nascimento} onChange={e => set('data_nascimento', e.target.value)} />
         </div>
       </Card>
 
-      {/* Dados Profissionais */}
       <Card>
         <div className="mb-5 border-b border-gray-100 pb-3">
           <h4 className="font-bold text-slate-800">Dados profissionais</h4>
           <p className="text-xs text-slate-500 mt-1">Necessários para emitir prescrições digitais (registro no conselho).</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <SelectField label="Conselho">
-            <option>CRM</option>
-            <option>CRO</option>
-            <option>CRP</option>
+          <SelectField label="Conselho" value={form.conselho_tipo} onChange={e => set('conselho_tipo', e.target.value)}>
+            <option>CRM</option><option>CRO</option><option>CRP</option>
           </SelectField>
-          <InputField label="Número" defaultValue="367025" />
-          <SelectField label="UF">
-            <option>BA</option>
-            <option>SP</option>
-            <option>RJ</option>
-            <option>MG</option>
+          <InputField label="Número" value={form.conselho_numero} onChange={e => set('conselho_numero', e.target.value)} />
+          <SelectField label="UF" value={form.conselho_uf} onChange={e => set('conselho_uf', e.target.value)}>
+            {['BA', 'SP', 'RJ', 'MG'].map(uf => <option key={uf}>{uf}</option>)}
           </SelectField>
         </div>
       </Card>
 
-      {/* Ações */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
         <Btn variant="secondary" icon={KeyRound} onClick={() => setPasswordModalOpen(true)}>Alterar senha</Btn>
-        <Btn icon={Save}>Salvar alterações</Btn>
+        <Btn icon={Save} onClick={salvar} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar alterações'}</Btn>
       </div>
 
-      {/* Modal Alterar Senha */}
-      <Modal open={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} title="Defina sua senha" maxWidth="max-w-md">
+      <Modal open={passwordModalOpen} onClose={() => setPasswordModalOpen(false)} title="Alterar senha" maxWidth="max-w-md">
         <div className="space-y-4">
           <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3 rounded-xl flex items-start gap-3 text-sm">
-            <AlertTriangle size={18} className="shrink-0 mt-0.5" />
-            <p>Por segurança, é necessário trocar a senha provisória antes de continuar.</p>
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" /><p>Escolha uma senha forte de pelo menos 6 caracteres.</p>
           </div>
-          <InputField label="Senha atual (provisória)" type="password" required />
-          <InputField label="Nova senha (mín. 8 caracteres)" type="password" required />
-          <InputField label="Confirme a nova senha" type="password" required />
+          <InputField label="Senha atual" type="password" value={senhaAtual} onChange={e => setSenhaAtual(e.target.value)} />
+          <InputField label="Nova senha" type="password" required value={novaSenha} onChange={e => setNovaSenha(e.target.value)} />
+          <InputField label="Confirme a nova senha" type="password" required value={confSenha} onChange={e => setConfSenha(e.target.value)} />
+          {erroSenha && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{erroSenha}</div>}
         </div>
         <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-gray-100">
-          <Btn variant="cancel" onClick={() => setPasswordModalOpen(false)}>Cancelar e sair</Btn>
-          <Btn icon={Save} onClick={() => setPasswordModalOpen(false)}>Salvar e entrar</Btn>
+          <Btn variant="cancel" onClick={() => setPasswordModalOpen(false)}>Cancelar</Btn>
+          <Btn icon={Save} onClick={salvarSenha}>Salvar senha</Btn>
         </div>
       </Modal>
-
     </div>
   );
 }
