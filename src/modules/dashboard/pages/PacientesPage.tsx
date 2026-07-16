@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Users, Search, UserPlus, Edit, FileText, Trash2, ArrowLeft, Calendar, FileSpreadsheet, Activity, Stethoscope, Camera, ClipboardList, Pill, AlertTriangle, Save, X, Upload, ImageIcon, Loader2, DollarSign } from 'lucide-react';
 import { PageHeader, Card, Btn, Modal, InputField, SelectField, Badge } from '../../../components/ui/shared';
 import { useNavigate } from 'react-router-dom';
-import { cidApi, memedApi, consultasApi, pacientesApi, filiaisApi, orcamentosApi, configApi, uploadArquivo, type CIDItem, type APIPaciente, type APIFilial, type APIConsulta, type APIOrcamento } from '../../../services/api';
+import { cidApi, memedApi, consultasApi, pacientesApi, filiaisApi, orcamentosApi, configApi, uploadArquivo, pacienteStore, type CIDItem, type APIPaciente, type APIFilial, type APIConsulta, type APIOrcamento } from '../../../services/api';
 import { cpfValido, formatarCpf } from '../../../utils/cpf';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
@@ -100,6 +100,11 @@ export function PacientesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [busca, setBusca] = useState('');
   const [perfilAtivo, setPerfilAtivo] = useState<Paciente | null>(null);
+  // Leva o paciente do perfil para o Odontograma (paciente já vem selecionado lá)
+  const irOdontograma = () => {
+    if (perfilAtivo) pacienteStore.set({ id: Number(perfilAtivo.id), nome: perfilAtivo.nome });
+    navigate('/dashboard/odontograma');
+  };
   const [modalConsultaOpen, setModalConsultaOpen] = useState(false);
   const [perfilTab, setPerfilTab] = useState('historico');
   const navigate = useNavigate();
@@ -1092,7 +1097,7 @@ export function PacientesPage() {
                       <FileText size={48} className="text-slate-300 mx-auto mb-3" />
                       <h4 className="text-slate-500 font-bold">Nenhum orçamento cadastrado</h4>
                       <p className="text-sm text-slate-400 mt-1">Gere novos orçamentos através do módulo de Odontograma.</p>
-                      <Btn variant="outline" size="sm" icon={Activity} className="mt-4" onClick={() => navigate('/dashboard/odontograma')}>Acessar Odontograma</Btn>
+                      <Btn variant="outline" size="sm" icon={Activity} className="mt-4" onClick={irOdontograma}>Acessar Odontograma</Btn>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -1123,7 +1128,7 @@ export function PacientesPage() {
                         );
                       })}
                       <div className="flex justify-end pt-2">
-                        <Btn variant="outline" size="sm" icon={Activity} onClick={() => navigate('/dashboard/odontograma')}>Novo Orçamento</Btn>
+                        <Btn variant="outline" size="sm" icon={Activity} onClick={irOdontograma}>Novo Orçamento</Btn>
                       </div>
                     </div>
                   )}
@@ -1192,7 +1197,7 @@ export function PacientesPage() {
                   <div className="text-center py-10">
                     <Stethoscope size={48} className="text-slate-300 mx-auto mb-3" />
                     <h4 className="text-slate-500 font-bold">Este recurso possui seu próprio módulo.</h4>
-                    <Btn variant="outline" size="sm" className="mt-4" onClick={() => navigate('/dashboard/odontograma')}>Acessar {perfilTab === 'odontograma' ? 'Odontograma' : 'Planos'}</Btn>
+                    <Btn variant="outline" size="sm" className="mt-4" onClick={irOdontograma}>Acessar {perfilTab === 'odontograma' ? 'Odontograma' : 'Planos'}</Btn>
                   </div>
                 </div>
               )}
@@ -1213,7 +1218,7 @@ export function PacientesPage() {
         <div className="space-y-4">
           <p className="text-sm text-slate-600">Selecione o tipo de procedimento para iniciar o atendimento de <strong>{perfilAtivo?.nome}</strong>:</p>
           <div className="grid grid-cols-2 gap-4">
-            <button onClick={() => navigate('/dashboard/odontograma')} className="p-4 border border-gray-200 rounded-xl hover:border-brand-primary hover:bg-brand-light/20 flex flex-col items-center justify-center gap-2 transition-colors">
+            <button onClick={irOdontograma} className="p-4 border border-gray-200 rounded-xl hover:border-brand-primary hover:bg-brand-light/20 flex flex-col items-center justify-center gap-2 transition-colors">
               <Activity size={24} className="text-brand-primary" />
               <span className="font-bold text-sm text-slate-700">Odontograma</span>
             </button>

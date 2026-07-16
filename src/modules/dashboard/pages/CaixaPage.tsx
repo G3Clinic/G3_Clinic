@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Landmark, ArrowUpCircle, ArrowDownCircle, Lock, DollarSign, Wallet } from 'lucide-react';
+import { Landmark, ArrowUpCircle, ArrowDownCircle, Lock, DollarSign, Wallet, Unlock, Clock } from 'lucide-react';
 import { PageHeader, Card, Btn, StatsCard, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
-import { caixaLancamentosApi, caixaTurnosApi, type APICaixaLancamento } from '../../../services/api';
+import { caixaLancamentosApi, caixaApi, type APICaixaLancamento } from '../../../services/api';
 
 const PAGAMENTOS = ['Dinheiro', 'PIX', 'Cartão de Crédito', 'Cartão de Débito'];
 const hojeISO = () => new Date().toISOString().split('T')[0];
@@ -14,8 +14,11 @@ export function CaixaPage() {
   const [valor, setValor] = useState('');
   const [forma, setForma] = useState('Dinheiro');
 
+  const [turno, setTurno] = useState<{ aberto: boolean; data_abertura?: string; abertura_origem?: string }>({ aberto: false });
+
   const carregar = useCallback(() => {
     caixaLancamentosApi.listar().then(setLancamentos).catch(() => {});
+    caixaApi.turnoAberto().then(setTurno).catch(() => setTurno({ aberto: false }));
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -36,28 +39,45 @@ export function CaixaPage() {
       setModalOpen(false); carregar();
     } catch (e) { alert(e instanceof Error ? e.message : 'Erro.'); }
   };
-  const fecharCaixa = async () => {
-    if (!confirm(`Fechar o caixa do dia? Total: R$ ${totalDia.toFixed(2)}`)) return;
+  const abrirCaixa = async () => {
     try {
-      await caixaTurnosApi.criar({
-        data_fechamento: new Date().toISOString(),
-        status_auditoria: 'Pendente de Auditoria',
-        total_arrecadado: entradasDinheiro + entradasCartaoPix,
-        total_retido_clinica: totalDia,
-      });
-      alert('Caixa fechado — turno registrado para auditoria.');
+      const r = await caixaApi.abrir('manual');
+      setTurno({ aberto: true, data_abertura: r.data_abertura, abertura_origem: r.abertura_origem });
+      alert('Caixa aberto (manual).');
+    } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao abrir o caixa.'); }
+  };
+  const fecharCaixa = async () => {
+    if (!confirm(`Fechar o caixa do dia? Total arrecadado: R$ ${(entradasDinheiro + entradasCartaoPix).toFixed(2)}`)) return;
+    try {
+      const r = await caixaApi.fechar('manual');
+      setTurno({ aberto: false });
+      alert(`Caixa fechado (manual) — total arrecadado R$ ${(r.total_arrecadado || 0).toFixed(2)}.`);
+      carregar();
     } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao fechar o caixa.'); }
   };
+  const horaBR = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
 
   return (
     <div className="space-y-6">
       <PageHeader icon={Landmark} title="Caixa do Dia" subtitle="Controle de fluxo de caixa, pagamentos e recebimentos diários">
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <Btn variant="secondary" icon={ArrowDownCircle} onClick={() => abrirModal('SAIDA')} className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200">Nova Saída</Btn>
           <Btn icon={ArrowUpCircle} onClick={() => abrirModal('ENTRADA')} className="bg-emerald-500 hover:bg-emerald-600 border-none shadow-emerald-500/20 shadow-sm">Nova Entrada</Btn>
-          <Btn variant="danger" icon={Lock} className="ml-2" onClick={fecharCaixa}>Fechar Caixa</Btn>
+          {turno.aberto
+            ? <Btn variant="danger" icon={Lock} className="ml-2" onClick={fecharCaixa}>Fechar Caixa</Btn>
+            : <Btn icon={Unlock} className="ml-2" onClick={abrirCaixa}>Abrir Caixa</Btn>}
         </div>
       </PageHeader>
+
+      {/* Status do turno de caixa */}
+      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm ${turno.aberto ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+        <Clock size={16} />
+        {turno.aberto ? (
+          <span>Caixa <strong>ABERTO</strong> desde <strong>{horaBR(turno.data_abertura)}</strong> — abertura <strong>{turno.abertura_origem === 'automatico' ? 'automática' : 'manual'}</strong>.</span>
+        ) : (
+          <span>Caixa <strong>FECHADO</strong>. Abra o caixa para registrar os pagamentos do dia.</span>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatsCard icon={DollarSign} label="Total do Dia" value={`R$ ${totalDia.toFixed(2)}`} color="blue" />

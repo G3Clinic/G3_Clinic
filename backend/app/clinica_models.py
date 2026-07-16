@@ -606,6 +606,25 @@ class ClinicaDado(Base, TenantMixin):
     atualizado_em = Column(DateTime, default=datetime.utcnow)
 
 
+# ── Caderneta de vacinação (inspirado no recurso FHIR Immunization) ─────
+class CadernetaVacina(Base, TenantMixin):
+    __tablename__ = "caderneta_vacinas"
+
+    id = Column(String, primary_key=True, default=_uid)
+    paciente_id = Column(Integer, index=True, nullable=True)
+    vacina = Column(String, nullable=True)             # vaccineCode (nome)
+    dose = Column(String, nullable=True)               # doseNumber (1ª dose, reforço…)
+    data_aplicacao = Column(Date, nullable=True)       # occurrenceDateTime
+    lote = Column(String, nullable=True)               # lotNumber
+    fabricante = Column(String, nullable=True)         # manufacturer
+    via = Column(String, nullable=True)                # route (IM, SC, oral…)
+    local_aplicacao = Column(String, nullable=True)    # site (deltoide, vasto lateral…)
+    aplicador = Column(String, nullable=True)          # performer
+    status = Column(String, nullable=True, default="aplicada")  # completed / not-done
+    observacoes = Column(Text, nullable=True)          # note
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+
 # ── Registro para CRUD automático ──────────────────────────────────────
 # (modelo, prefixo de rota, módulo p/ controle de permissão)
 CRUD_MODELS = [
@@ -648,4 +667,5 @@ CRUD_MODELS = [
     (Notificacao, "notificacoes", "admin"),
     (EventoAuditoria, "eventos_auditoria", "financeiro"),
     (ClinicaDado, "clinica_dados", "admin"),
+    (CadernetaVacina, "caderneta_vacinas", "prontuario"),
 ]

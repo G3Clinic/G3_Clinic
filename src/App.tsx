@@ -65,7 +65,9 @@ function App() {
           <Route path="relatorios" element={<RelatoriosPage />} />
           <Route path="financeiro" element={<FinDashboardPage />} />
           <Route path="financeiro/recebimentos" element={<RecebimentosPage />} />
-          <Route path="financeiro/auditoria" element={<AuditoriaPage />} />
+          {/* Log geral de auditoria — fora do Financeiro (rota antiga redireciona) */}
+          <Route path="auditoria" element={<AuditoriaPage />} />
+          <Route path="financeiro/auditoria" element={<Navigate to="/dashboard/auditoria" replace />} />
           <Route path="admin/usuarios" element={<AdminCadastroPage />} />
           <Route path="admin/controle" element={<AdminControlePage />} />
           <Route path="admin/identidade" element={<AdminIdentidadePage />} />

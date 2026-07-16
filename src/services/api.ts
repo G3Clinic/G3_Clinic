@@ -32,6 +32,16 @@ export const filialStore = {
   clear: () => localStorage.removeItem(FILIAL_KEY),
 };
 
+// Paciente "levado" de uma tela para outra (ex.: Pacientes → Odontograma) — one-shot.
+const PACIENTE_KEY = 'g3_paciente_ativo';
+export const pacienteStore = {
+  get: (): { id: number; nome: string } | null => {
+    try { const s = sessionStorage.getItem(PACIENTE_KEY); return s ? JSON.parse(s) : null; } catch { return null; }
+  },
+  set: (p: { id: number; nome: string }) => sessionStorage.setItem(PACIENTE_KEY, JSON.stringify(p)),
+  clear: () => sessionStorage.removeItem(PACIENTE_KEY),
+};
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const token = tokenStore.get();
   const filial = filialStore.get();
@@ -259,6 +269,12 @@ export interface APIOdontoProc {
 }
 export const odontoProcApi = crudApi<APIOdontoProc>('odonto_procedimentos');
 
+// Semeia especialidades + intervenções padrão para a empresa (idempotente)
+export function seedOdontoPadrao() {
+  return apiFetch<{ ok: boolean; especialidades_criadas: number; intervencoes_criadas: number }>(
+    '/api/odonto/seed-padrao', { method: 'POST' });
+}
+
 // Usuários (perfis) + permissões
 export interface APIUsuario {
   id: string;
@@ -323,9 +339,9 @@ export interface APIAgendamento {
 }
 export const agendamentosApi = crudApi<APIAgendamento>('agendamentos');
 
-// Finaliza o atendimento: marca Finalizado, lança no caixa do dia e audita (regra de negócio no backend)
+// Finaliza o atendimento: marca Finalizado; caixa só se pago, senão gera pendência (regra no backend)
 export function finalizarAtendimento(agendamentoId: string) {
-  return apiFetch<{ ok: boolean; agendamento_id: string; ja_finalizado: boolean; caixa_lancamento_id: string | null }>(
+  return apiFetch<{ ok: boolean; agendamento_id: string; ja_finalizado: boolean; status_pagamento: 'pago' | 'pendente'; caixa_lancamento_id: string | null }>(
     `/api/agendamentos/${agendamentoId}/finalizar`, { method: 'POST' });
 }
 
@@ -357,6 +373,21 @@ export interface APIRecebimento {
   data_vencimento?: string | null; data_recebimento?: string | null; observacoes?: string | null;
 }
 export const recebimentosApi = crudApi<APIRecebimento>('recebimentos');
+
+// Baixa manual de um recebimento (marca pago + lança no caixa do dia)
+export function baixarRecebimento(id: string, forma_pagamento?: string) {
+  return apiFetch<{ ok: boolean; ja_pago: boolean; caixa_lancamento_id: string | null }>(
+    `/api/recebimentos/${id}/baixar`, { method: 'POST', body: JSON.stringify({ forma_pagamento }) });
+}
+
+// Caixa do dia — abrir/fechar turno (hora + origem automático/manual)
+export const caixaApi = {
+  turnoAberto: () => apiFetch<{ aberto: boolean; id?: string; data_abertura?: string; abertura_origem?: string }>('/api/caixa/turno-aberto'),
+  abrir: (origem: 'manual' | 'automatico' = 'manual') =>
+    apiFetch<{ ok: boolean; id: string; data_abertura: string; abertura_origem: string }>('/api/caixa/abrir', { method: 'POST', body: JSON.stringify({ origem }) }),
+  fechar: (origem: 'manual' | 'automatico' = 'manual') =>
+    apiFetch<{ ok: boolean; data_fechamento: string; total_arrecadado: number; fechamento_origem: string; abertura_origem: string }>('/api/caixa/fechar', { method: 'POST', body: JSON.stringify({ origem }) }),
+};
 
 // Recepção laboratorial
 export interface APIRecepcaoLab {
@@ -405,7 +436,7 @@ export const estoqueApi = {
 };
 
 // Auditoria — trilha de eventos
-export interface APIEvento { id: string; usuario_nome?: string | null; acao?: string | null; modulo?: string | null; entidade?: string | null; descricao?: string | null; criado_em?: string | null; }
+export interface APIEvento { id: string; usuario_id?: string | null; usuario_nome?: string | null; acao?: string | null; modulo?: string | null; entidade?: string | null; entidade_id?: string | null; descricao?: string | null; criado_em?: string | null; }
 export const eventosApi = crudApi<APIEvento>('eventos_auditoria');
 
 // Caixa (lançamentos do dia)
@@ -435,6 +466,15 @@ export const notificacoesApi = crudApi<APINotificacao>('notificacoes');
 export interface APIModeloProntuario { id: string; titulo?: string | null; conteudo?: any; tipo_acesso?: string | null; profissional_id?: string | null; criado_em?: string | null; }
 export const modelosProntuarioApi = crudApi<APIModeloProntuario>('modelos_prontuario');
 
+// Caderneta de vacinação (inspirada no FHIR Immunization)
+export interface APIVacina {
+  id: string; paciente_id?: number | null; vacina?: string | null; dose?: string | null;
+  data_aplicacao?: string | null; lote?: string | null; fabricante?: string | null;
+  via?: string | null; local_aplicacao?: string | null; aplicador?: string | null;
+  status?: string | null; observacoes?: string | null; criado_em?: string | null;
+}
+export const vacinasApi = crudApi<APIVacina>('caderneta_vacinas');
+
 // Backup (export/import dos dados do tenant)
 export const backupApi = {
   exportar: () => apiFetch<Record<string, unknown>>('/api/backup'),
@@ -456,13 +496,13 @@ export const documentosApi = crudApi<APIDocumento>('documentos_atendimento');
 export interface APIOrcamento { id: string; paciente_id?: number | null; profissional_id?: string | null; valor_total?: number | null; status_geral?: string | null; data_criacao?: string | null; }
 export const orcamentosApi = crudApi<APIOrcamento>('orcamentos');
 
-export interface APIOrcamentoItem { id: string; orcamento_id?: string | null; dente_numero?: string | null; faces?: string | null; procedimento_id?: string | null; valor_cobrado?: number | null; status_item?: string | null; }
+export interface APIOrcamentoItem { id: string; orcamento_id?: string | null; dente_numero?: string | null; faces?: string | null; procedimento_id?: string | null; valor_cobrado?: number | null; status_item?: string | null; status_visual?: string | null; }
 export const orcamentoItensApi = crudApi<APIOrcamentoItem>('orcamento_itens');
 
 // Finaliza orçamento (cria orçamento + itens + recebimento pendente — regra de negócio)
 export function finalizarOrcamento(data: {
   paciente_id: number; valor_total: number;
-  itens: { dente_numero?: string; faces?: string; procedimento_id?: string; valor_cobrado?: number }[];
+  itens: { dente_numero?: string; faces?: string; procedimento_id?: string; valor_cobrado?: number; status_visual?: string }[];
 }) {
   return apiFetch<{ ok: boolean; orcamento_id: string; recebimento_id: string }>(
     '/api/orcamentos/finalizar', { method: 'POST', body: JSON.stringify(data) });

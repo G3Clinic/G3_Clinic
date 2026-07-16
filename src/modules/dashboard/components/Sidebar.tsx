@@ -159,12 +159,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                     <HeartPulse size={18} className="text-white" />
                   )}
                 </div>
-                {!isCollapsed && (
-                  <div className="whitespace-nowrap transition-opacity duration-300">
-                    <div className="text-sm font-bold leading-tight">{theme.companyName || 'Clínica Dashboard'}</div>
-                    <div className="text-[10px] font-medium opacity-70">Gestão Clínica</div>
-                  </div>
-                )}
+                {/* Nomes ocultados a pedido do usuário */}
               </>
             )}
           </div>
@@ -201,7 +196,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           <NavGroup icon={DollarSign} label="Financeiro" defaultOpen={false} isCollapsed={isCollapsed} onExpand={() => setIsCollapsed(false)}>
             <SubNavItem label="Dashboard" to="/dashboard/financeiro" />
             <SubNavItem label="Recebimentos" to="/dashboard/financeiro/recebimentos" />
-            <SubNavItem label="Auditoria Financeira" to="/dashboard/financeiro/auditoria" />
           </NavGroup>
 
           <div className={clsx("text-[10px] font-bold uppercase tracking-widest px-3 mt-5 mb-2 opacity-50", isCollapsed && "text-center px-0")}>
@@ -219,6 +213,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <SubNavItem label="Convênios" to="/dashboard/admin/convenios" />
             <SubNavItem label="Custos & Laboratório" to="/dashboard/admin/dre" />
             <SubNavItem label="Repasses Recepcionistas" to="/dashboard/admin/repasse-recep" />
+            <SubNavItem label="Registro de Atividades (Log)" to="/dashboard/auditoria" />
           </NavGroup>
 
           <div className={clsx("text-[10px] font-bold uppercase tracking-widest px-3 mt-5 mb-2 opacity-50", isCollapsed && "text-center px-0")}>

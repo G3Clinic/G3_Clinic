@@ -4,9 +4,10 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 import os
+import json
 import shutil
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import List, Optional
 
 from app.config import settings
@@ -287,6 +288,7 @@ class OrcItemIn(BaseModel):
     faces: Optional[str] = None
     procedimento_id: Optional[str] = None
     valor_cobrado: Optional[float] = None
+    status_visual: Optional[str] = None
 
 
 class FinalizarOrcamentoIn(BaseModel):
@@ -312,14 +314,14 @@ def finalizar_orcamento(
         db.add(clinica_models.OrcamentoItem(
             empresa_id=user.empresa_id, orcamento_id=orc.id, dente_numero=it.dente_numero,
             faces=it.faces, procedimento_id=it.procedimento_id, valor_cobrado=it.valor_cobrado,
-            status_item="Aprovado",
+            status_item="Aprovado", status_visual=it.status_visual or "a_realizar",
         ))
 
-    # gera recebimento pendente referente ao orçamento
+    # gera recebimento pendente identificado pelo orçamento (rastreável na baixa)
     rec = clinica_models.Recebimento(
         empresa_id=user.empresa_id, paciente_id=dados.paciente_id, valor=dados.valor_total,
         status="PENDENTE", descricao="Orçamento odontológico", data_vencimento=date.today(),
-        criado_por=user.id,
+        observacoes=f"ODONTO:{orc.id}", criado_por=user.id,
     )
     db.add(rec)
     registrar_evento(db, user, "criação", "odontograma", "orcamentos", orc.id,
@@ -328,16 +330,124 @@ def finalizar_orcamento(
     return {"ok": True, "orcamento_id": orc.id, "recebimento_id": rec.id}
 
 
-# --- Finalizar atendimento: lança no caixa do dia + auditoria ---
+# ── Helpers de caixa/pagamento ─────────────────────────────────────────────
+def _turno_caixa_aberto(db: Session, empresa_id: int):
+    """Retorna o turno de caixa aberto (sem fechamento) da empresa, se houver."""
+    return db.query(clinica_models.CaixaTurno).filter(
+        clinica_models.CaixaTurno.empresa_id == empresa_id,
+        clinica_models.CaixaTurno.data_fechamento.is_(None),
+    ).order_by(clinica_models.CaixaTurno.data_abertura.desc()).first()
+
+
+def _lancar_no_caixa(db: Session, user, *, valor, descricao, paciente_id=None,
+                     unidade_id=None, forma_pagamento=None):
+    """Cria uma ENTRADA no caixa do dia, vinculando ao turno aberto (se houver)."""
+    lanc = clinica_models.CaixaLancamento(
+        empresa_id=user.empresa_id, unidade_id=unidade_id, tipo="ENTRADA",
+        descricao=descricao, paciente_id=paciente_id, valor=valor or 0,
+        forma_pagamento=forma_pagamento or None, data=date.today(), criado_por=user.id,
+    )
+    db.add(lanc)
+    db.flush()
+    return lanc
+
+
+def _valor_do_agendamento(db: Session, ag, empresa_id: int) -> float:
+    valor = ag.valor_cobrado
+    if not valor and ag.procedimento_id:
+        proc = db.query(clinica_models.Procedimento).filter(
+            clinica_models.Procedimento.id == ag.procedimento_id,
+            clinica_models.Procedimento.empresa_id == empresa_id,
+        ).first()
+        valor = proc.valor_padrao if proc else 0
+    return float(valor or 0)
+
+
+# --- Odontograma: semear especialidades + intervenções padrão (idempotente) ---
+_ODONTO_SEED = [
+    ("Dentística", "#3B82F6", [
+        ("Restauração em resina", "restauracao", 180.0),
+        ("Restauração em amálgama", "restauracao", 150.0),
+        ("Remoção de cárie", "carie", 120.0),
+        ("Aplicação de selante", "nenhum", 80.0),
+    ]),
+    ("Endodontia", "#8B5CF6", [
+        ("Tratamento de canal", "canal", 600.0),
+        ("Retratamento de canal", "canal", 800.0),
+        ("Pulpotomia", "canal", 300.0),
+    ]),
+    ("Cirurgia", "#EF4444", [
+        ("Extração simples", "extracao", 150.0),
+        ("Extração de siso", "extracao", 400.0),
+    ]),
+    ("Prótese", "#F59E0B", [
+        ("Coroa total", "coroa", 900.0),
+        ("Faceta", "coroa", 700.0),
+        ("Provisório", "provisorio", 150.0),
+    ]),
+    ("Periodontia", "#10B981", [
+        ("Raspagem e profilaxia", "nenhum", 150.0),
+        ("Tratamento periodontal", "nenhum", 400.0),
+    ]),
+    ("Implantodontia", "#0EA5E9", [
+        ("Instalação de implante", "nenhum", 2000.0),
+    ]),
+    ("Ortodontia", "#EC4899", [
+        ("Instalação de aparelho", "nenhum", 1200.0),
+        ("Manutenção ortodôntica", "nenhum", 150.0),
+    ]),
+    ("Odontopediatria", "#14B8A6", [
+        ("Aplicação de flúor", "nenhum", 80.0),
+        ("Restauração em dente decíduo", "restauracao", 150.0),
+    ]),
+]
+
+
+@app.post("/api/odonto/seed-padrao")
+def seed_odonto_padrao(user=Depends(require_modulo("odontograma")), db: Session = Depends(get_db)):
+    """Cria especialidades e intervenções padrão para a empresa (não duplica)."""
+    esps_criadas = 0
+    intervs_criadas = 0
+    for nome_esp, cor, intervs in _ODONTO_SEED:
+        esp = db.query(clinica_models.EspecialidadeOdonto).filter(
+            clinica_models.EspecialidadeOdonto.empresa_id == user.empresa_id,
+            clinica_models.EspecialidadeOdonto.nome == nome_esp,
+        ).first()
+        if not esp:
+            esp = clinica_models.EspecialidadeOdonto(empresa_id=user.empresa_id, nome=nome_esp, cor=cor, ativo=True)
+            db.add(esp)
+            db.flush()
+            esps_criadas += 1
+        for nome_int, tipo_visual, valor in intervs:
+            existe = db.query(clinica_models.OdontoProcedimento).filter(
+                clinica_models.OdontoProcedimento.empresa_id == user.empresa_id,
+                clinica_models.OdontoProcedimento.especialidade_id == esp.id,
+                clinica_models.OdontoProcedimento.nome_intervencao == nome_int,
+            ).first()
+            if not existe:
+                db.add(clinica_models.OdontoProcedimento(
+                    empresa_id=user.empresa_id, especialidade_id=esp.id, nome_intervencao=nome_int,
+                    valor_base=valor, tipo_visual=tipo_visual, ativo=True,
+                ))
+                intervs_criadas += 1
+    registrar_evento(db, user, "criação", "odontograma", "especialidades_odonto", "seed",
+                     f"Carregou padrão: {esps_criadas} especialidades, {intervs_criadas} intervenções")
+    db.commit()
+    return {"ok": True, "especialidades_criadas": esps_criadas, "intervencoes_criadas": intervs_criadas}
+
+
+# --- Finalizar atendimento: caixa SÓ após pagamento; senão gera pendência ---
 @app.post("/api/agendamentos/{agendamento_id}/finalizar")
 def finalizar_atendimento(
     agendamento_id: str,
     user=Depends(require_modulo("recepcao")),
     db: Session = Depends(get_db),
 ):
-    """Encerra o fluxo de um atendimento: marca como Finalizado, contabiliza
-    o valor no caixa do dia (caixa_lancamentos, ENTRADA) e registra no log.
-    Idempotente: se o agendamento já estava Finalizado, não lança de novo."""
+    """Marca o atendimento como Finalizado.
+    - Se JÁ está pago (recebimento RECEBIDO) → lança no caixa do dia.
+    - Se NÃO está pago → cria/garante um recebimento PENDENTE (status
+      'pendente de pagamento'); o caixa só recebe a baixa quando pago.
+    Idempotente para o caixa (não lança duas vezes)."""
     ag = db.query(clinica_models.Agendamento).filter(
         clinica_models.Agendamento.id == agendamento_id,
         clinica_models.Agendamento.empresa_id == user.empresa_id,
@@ -347,42 +457,152 @@ def finalizar_atendimento(
 
     ja_finalizado = (ag.status == "Finalizado")
     ag.status = "Finalizado"
-    ag.atualizado_em = __import__("datetime").datetime.utcnow()
+    ag.atualizado_em = datetime.utcnow()
+
+    pac = db.query(models.Paciente).filter(
+        models.Paciente.id == ag.paciente_id,
+        models.Paciente.empresa_id == user.empresa_id,
+    ).first() if ag.paciente_id else None
+    nome_pac = pac.nome if pac else "Paciente"
+    valor = _valor_do_agendamento(db, ag, user.empresa_id)
+
+    # Já existe recebimento pago para este agendamento?
+    pago = db.query(clinica_models.Recebimento).filter(
+        clinica_models.Recebimento.empresa_id == user.empresa_id,
+        clinica_models.Recebimento.agendamento_id == ag.id,
+        clinica_models.Recebimento.status == "RECEBIDO",
+    ).first()
 
     lancamento_id = None
+    status_pagamento = "pago" if pago else "pendente"
+
     if not ja_finalizado:
-        # Valor: o cobrado no agendamento; se ausente, o padrão do procedimento.
-        valor = ag.valor_cobrado
-        if not valor and ag.procedimento_id:
-            proc = db.query(clinica_models.Procedimento).filter(
-                clinica_models.Procedimento.id == ag.procedimento_id,
-                clinica_models.Procedimento.empresa_id == user.empresa_id,
+        if pago:
+            lanc = _lancar_no_caixa(db, user, valor=valor, unidade_id=ag.unidade_id,
+                                    paciente_id=ag.paciente_id, forma_pagamento=pago.forma_pagamento,
+                                    descricao=f"Atendimento pago — {nome_pac}")
+            lancamento_id = lanc.id
+            registrar_evento(db, user, "finalização", "recepcao", "agendamentos", ag.id,
+                             f'Finalizou atendimento de "{nome_pac}" (pago) — R$ {valor:.2f} no caixa')
+        else:
+            # Garante um recebimento PENDENTE (pendente de pagamento)
+            pend = db.query(clinica_models.Recebimento).filter(
+                clinica_models.Recebimento.empresa_id == user.empresa_id,
+                clinica_models.Recebimento.agendamento_id == ag.id,
             ).first()
-            valor = proc.valor_padrao if proc else 0
-        valor = valor or 0
-
-        pac = db.query(models.Paciente).filter(
-            models.Paciente.id == ag.paciente_id,
-            models.Paciente.empresa_id == user.empresa_id,
-        ).first() if ag.paciente_id else None
-        nome_pac = pac.nome if pac else "Paciente"
-
-        lanc = clinica_models.CaixaLancamento(
-            empresa_id=user.empresa_id, unidade_id=ag.unidade_id,
-            tipo="ENTRADA", descricao=f"Atendimento finalizado — {nome_pac}",
-            paciente_id=ag.paciente_id, valor=valor,
-            forma_pagamento=ag.forma_pagamento or None,
-            data=date.today(), criado_por=user.id,
-        )
-        db.add(lanc)
-        db.flush()
-        lancamento_id = lanc.id
-        registrar_evento(db, user, "finalização", "recepcao", "agendamentos", ag.id,
-                         f'Finalizou atendimento de "{nome_pac}" — R$ {valor:.2f} lançado no caixa do dia')
+            if not pend:
+                db.add(clinica_models.Recebimento(
+                    empresa_id=user.empresa_id, unidade_id=ag.unidade_id, agendamento_id=ag.id,
+                    paciente_id=ag.paciente_id, convenio_id=ag.convenio_id, valor=valor,
+                    status="PENDENTE", descricao="Atendimento (pendente de pagamento)",
+                    forma_pagamento=ag.forma_pagamento, data_vencimento=date.today(), criado_por=user.id,
+                ))
+            registrar_evento(db, user, "finalização", "recepcao", "agendamentos", ag.id,
+                             f'Finalizou atendimento de "{nome_pac}" — pendente de pagamento (R$ {valor:.2f})')
 
     db.commit()
     return {"ok": True, "agendamento_id": ag.id, "ja_finalizado": ja_finalizado,
-            "caixa_lancamento_id": lancamento_id}
+            "status_pagamento": status_pagamento, "caixa_lancamento_id": lancamento_id}
+
+
+# --- Baixa manual de recebimento: marca pago + lança no caixa do dia ---
+@app.post("/api/recebimentos/{recebimento_id}/baixar")
+def baixar_recebimento(
+    recebimento_id: str,
+    dados: dict = Body(default={}),
+    user=Depends(require_modulo("caixa")),
+    db: Session = Depends(get_db),
+):
+    rec = db.query(clinica_models.Recebimento).filter(
+        clinica_models.Recebimento.id == recebimento_id,
+        clinica_models.Recebimento.empresa_id == user.empresa_id,
+    ).first()
+    if rec is None:
+        raise HTTPException(status_code=404, detail="Recebimento não encontrado")
+    if rec.status == "RECEBIDO":
+        return {"ok": True, "ja_pago": True, "caixa_lancamento_id": None}
+
+    forma = dados.get("forma_pagamento") or rec.forma_pagamento
+    rec.status = "RECEBIDO"
+    rec.data_recebimento = date.today()
+    if forma:
+        rec.forma_pagamento = forma
+    turno = _turno_caixa_aberto(db, user.empresa_id)
+    if turno:
+        rec.caixa_turno_id = turno.id
+
+    pac = db.query(models.Paciente).filter(
+        models.Paciente.id == rec.paciente_id, models.Paciente.empresa_id == user.empresa_id,
+    ).first() if rec.paciente_id else None
+    nome_pac = pac.nome if pac else (rec.descricao or "Recebimento")
+
+    lanc = _lancar_no_caixa(db, user, valor=rec.valor, unidade_id=rec.unidade_id,
+                            paciente_id=rec.paciente_id, forma_pagamento=forma,
+                            descricao=f"Pagamento — {nome_pac}")
+    registrar_evento(db, user, "alteração", "caixa", "recebimentos", rec.id,
+                     f'Baixa de pagamento — R$ {(rec.valor or 0):.2f} ({nome_pac})')
+    db.commit()
+    return {"ok": True, "ja_pago": False, "caixa_lancamento_id": lanc.id}
+
+
+# --- Caixa do dia: abrir e fechar turno (com hora e origem auto/manual) ---
+@app.get("/api/caixa/turno-aberto")
+def caixa_turno_aberto(user=Depends(require_modulo("caixa")), db: Session = Depends(get_db)):
+    t = _turno_caixa_aberto(db, user.empresa_id)
+    if not t:
+        return {"aberto": False}
+    meta = {}
+    try:
+        meta = json.loads(t.status_auditoria) if t.status_auditoria else {}
+    except (ValueError, TypeError):
+        meta = {}
+    return {"aberto": True, "id": t.id, "data_abertura": t.data_abertura,
+            "abertura_origem": meta.get("abertura", "manual")}
+
+
+@app.post("/api/caixa/abrir")
+def caixa_abrir(dados: dict = Body(default={}), user=Depends(require_modulo("caixa")), db: Session = Depends(get_db)):
+    if _turno_caixa_aberto(db, user.empresa_id):
+        raise HTTPException(status_code=400, detail="Já existe um caixa aberto.")
+    origem = "automatico" if dados.get("origem") == "automatico" else "manual"
+    t = clinica_models.CaixaTurno(
+        empresa_id=user.empresa_id, recepcionista_id=user.id, data_abertura=datetime.utcnow(),
+        status_auditoria=json.dumps({"status": "aberto", "abertura": origem}),
+    )
+    db.add(t)
+    registrar_evento(db, user, "criação", "caixa", "caixa_turnos", t.id,
+                     f"Abertura de caixa ({origem})")
+    db.commit()
+    return {"ok": True, "id": t.id, "data_abertura": t.data_abertura, "abertura_origem": origem}
+
+
+@app.post("/api/caixa/fechar")
+def caixa_fechar(dados: dict = Body(default={}), user=Depends(require_modulo("caixa")), db: Session = Depends(get_db)):
+    t = _turno_caixa_aberto(db, user.empresa_id)
+    if not t:
+        raise HTTPException(status_code=400, detail="Nenhum caixa aberto para fechar.")
+    origem = "automatico" if dados.get("origem") == "automatico" else "manual"
+    # Total arrecadado = entradas do caixa desde a abertura do turno.
+    entradas = db.query(clinica_models.CaixaLancamento).filter(
+        clinica_models.CaixaLancamento.empresa_id == user.empresa_id,
+        clinica_models.CaixaLancamento.tipo == "ENTRADA",
+        clinica_models.CaixaLancamento.criado_em >= t.data_abertura,
+    ).all()
+    total = sum(l.valor or 0 for l in entradas)
+    meta = {}
+    try:
+        meta = json.loads(t.status_auditoria) if t.status_auditoria else {}
+    except (ValueError, TypeError):
+        meta = {}
+    meta.update({"status": "fechado", "fechamento": origem})
+    t.data_fechamento = datetime.utcnow()
+    t.status_auditoria = json.dumps(meta)
+    t.total_arrecadado = total
+    registrar_evento(db, user, "alteração", "caixa", "caixa_turnos", t.id,
+                     f"Fechamento de caixa ({origem}) — total R$ {total:.2f}")
+    db.commit()
+    return {"ok": True, "id": t.id, "data_fechamento": t.data_fechamento,
+            "total_arrecadado": total, "fechamento_origem": origem, "abertura_origem": meta.get("abertura", "manual")}
 
 
 # --- Backup: exporta os dados da empresa (JSON) ---

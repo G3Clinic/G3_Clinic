@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CreditCard, TrendingUp, TrendingDown, Plus, CheckCircle2, Edit2, Trash2 } from 'lucide-react';
+import { CreditCard, TrendingUp, TrendingDown, Plus, CheckCircle2, Edit2, Trash2, BadgeDollarSign } from 'lucide-react';
 import { PageHeader, Card, StatsCard, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import {
-  recebimentosApi, pacientesApi, conveniosApi,
+  recebimentosApi, pacientesApi, conveniosApi, baixarRecebimento,
   type APIRecebimento, type APIPaciente, type APIConvenio,
 } from '../../../services/api';
+
+const PAGAMENTOS = ['Dinheiro', 'PIX', 'Cartão de Crédito', 'Cartão de Débito'];
 
 const STATUS = [
   { v: 'PENDENTE', label: 'Pendente' },
@@ -80,6 +82,21 @@ export function RecebimentosPage() {
   };
   const excluir = async (r: APIRecebimento) => { if (confirm('Excluir este recebimento?')) { await recebimentosApi.excluir(r.id); carregar(); } };
 
+  // Baixa manual: marca pago e lança no caixa do dia
+  const [baixaModal, setBaixaModal] = useState<APIRecebimento | null>(null);
+  const [baixaForma, setBaixaForma] = useState('Dinheiro');
+  const [baixando, setBaixando] = useState(false);
+  const abrirBaixa = (r: APIRecebimento) => { setBaixaModal(r); setBaixaForma(r.forma_pagamento || 'Dinheiro'); };
+  const confirmarBaixa = async () => {
+    if (!baixaModal) return;
+    setBaixando(true);
+    try {
+      await baixarRecebimento(baixaModal.id, baixaForma);
+      setBaixaModal(null); carregar();
+    } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao dar baixa.'); }
+    finally { setBaixando(false); }
+  };
+
   const badgeStatus = (s?: string | null) => s === 'RECEBIDO' ? <Badge color="green">Pago</Badge> : s === 'ESTORNADO' ? <Badge color="gray">Estornado</Badge> : <Badge color="yellow">Pendente</Badge>;
 
   return (
@@ -119,7 +136,13 @@ export function RecebimentosPage() {
                     <td className="px-4 py-3 font-mono text-slate-700">R$ {(r.valor ?? 0).toFixed(2)}</td>
                     <td className="px-4 py-3 text-slate-500">{r.data_vencimento ? r.data_vencimento.split('-').reverse().join('/') : '—'}</td>
                     <td className="px-4 py-3">{badgeStatus(r.status)}</td>
-                    <td className="px-4 py-3"><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <td className="px-4 py-3"><div className="flex gap-1 items-center">
+                      {r.status === 'PENDENTE' && (
+                        <button onClick={() => abrirBaixa(r)} title="Dar baixa (marcar pago + lançar no caixa)"
+                          className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-2 py-1">
+                          <BadgeDollarSign size={13} /> Dar baixa
+                        </button>
+                      )}
                       <button onClick={() => abrirEdit(r)} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-light rounded-lg"><Edit2 size={14} /></button>
                       <button onClick={() => excluir(r)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
                     </div></td>
@@ -154,6 +177,19 @@ export function RecebimentosPage() {
           <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
             <Btn variant="ghost" onClick={() => setModal(false)}>Cancelar</Btn>
             <Btn onClick={salvar} disabled={salvando} className="bg-emerald-500 hover:bg-emerald-600 border-none text-white" icon={CheckCircle2}>{salvando ? 'Salvando...' : 'Salvar Recebimento'}</Btn>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!baixaModal} onClose={() => setBaixaModal(null)} title="Dar baixa no pagamento">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">Confirmar recebimento de <strong>{nomePac(baixaModal?.paciente_id)}</strong> no valor de <strong>R$ {(baixaModal?.valor ?? 0).toFixed(2)}</strong>. Será lançado no caixa do dia.</p>
+          <SelectField label="Forma de Pagamento" value={baixaForma} onChange={e => setBaixaForma(e.target.value)}>
+            {PAGAMENTOS.map(p => <option key={p}>{p}</option>)}
+          </SelectField>
+          <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
+            <Btn variant="ghost" onClick={() => setBaixaModal(null)}>Cancelar</Btn>
+            <Btn onClick={confirmarBaixa} disabled={baixando} className="bg-emerald-500 hover:bg-emerald-600 border-none text-white" icon={CheckCircle2}>{baixando ? 'Processando...' : 'Confirmar Baixa'}</Btn>
           </div>
         </div>
       </Modal>

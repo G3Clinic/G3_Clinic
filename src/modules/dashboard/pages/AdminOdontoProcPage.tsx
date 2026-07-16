@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Smile, Plus, ChevronDown, ChevronRight, Edit2, Trash2, Save } from 'lucide-react';
+import { Smile, Plus, ChevronDown, ChevronRight, Edit2, Trash2, Save, DownloadCloud } from 'lucide-react';
 import { PageHeader, Card, Btn, Modal, InputField, SelectField } from '../../../components/ui/shared';
-import { especialidadesApi, odontoProcApi, type APIEspecialidade, type APIOdontoProc } from '../../../services/api';
+import { especialidadesApi, odontoProcApi, seedOdontoPadrao, type APIEspecialidade, type APIOdontoProc } from '../../../services/api';
 
 export function AdminOdontoProcPage() {
   const [especialidades, setEspecialidades] = useState<APIEspecialidade[]>([]);
@@ -26,6 +26,17 @@ export function AdminOdontoProcPage() {
   const [erroIntv, setErroIntv] = useState('');
 
   const toggle = (id: string) => setOpen(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const [semeando, setSemeando] = useState(false);
+  const carregarPadrao = async () => {
+    if (!confirm('Carregar o conjunto padrão de especialidades e intervenções? Itens já existentes não são duplicados.')) return;
+    setSemeando(true);
+    try {
+      const r = await seedOdontoPadrao();
+      carregar();
+      alert(`Padrão carregado: ${r.especialidades_criadas} especialidade(s) e ${r.intervencoes_criadas} intervenção(ões) adicionadas.`);
+    } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao carregar padrão.'); }
+    finally { setSemeando(false); }
+  };
 
   const carregar = useCallback(() => {
     setLoading(true);
@@ -84,7 +95,10 @@ export function AdminOdontoProcPage() {
   return (
     <div className="space-y-5">
       <PageHeader icon={Smile} title="Especialidades Odontológicas" subtitle="Cadastre especialidades e suas intervenções disponíveis no odontograma">
-        <Btn icon={Plus} onClick={abrirNovaEsp}>Nova Especialidade</Btn>
+        <div className="flex gap-2">
+          <Btn variant="secondary" icon={DownloadCloud} onClick={carregarPadrao} disabled={semeando}>{semeando ? 'Carregando...' : 'Carregar padrão'}</Btn>
+          <Btn icon={Plus} onClick={abrirNovaEsp}>Nova Especialidade</Btn>
+        </div>
       </PageHeader>
 
       {loading ? (

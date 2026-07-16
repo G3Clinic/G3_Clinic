@@ -120,10 +120,7 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
           <Menu size={22} />
         </button>
         <div className="hidden md:flex items-center gap-3">
-          <div>
-            <h1 className="text-lg font-black text-brand-primary uppercase tracking-tight">{theme.companyName || 'Clínica da Família'}</h1>
-            <p className="text-[10px] font-bold opacity-60 uppercase tracking-widest">Gestão Operacional</p>
-          </div>
+          {/* Nomes ocultados a pedido do usuário, apenas a logo (no sidebar) ou menu fica visível */}
         </div>
       </div>
 

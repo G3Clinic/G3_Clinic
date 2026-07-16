@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ClipboardList, Search, User, FileText, Activity, Stethoscope, FileSymlink, AlertCircle, Plus, Trash2, Pill, BookText, Save, Edit2, Settings, ChevronRight } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { ClipboardList, Search, User, FileText, Activity, Stethoscope, FileSymlink, AlertCircle, Plus, Trash2, Pill, BookText, Save, Edit2, Settings, ChevronRight, Syringe } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, InputField, Modal } from '../../../components/ui/shared';
 import {
   pacientesApi, atendimentosClinicosApi, evolucoesApi, documentosApi, modelosProntuarioApi,
-  type APIPaciente, type APIEvolucao, type APIModeloProntuario,
+  procedimentosApi, memedApi, vacinasApi,
+  type APIPaciente, type APIEvolucao, type APIModeloProntuario, type APIProcedimento, type APIVacina,
 } from '../../../services/api';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
@@ -21,7 +22,7 @@ const QUILL_MODULES = {
   ],
 };
 
-type TabId = 'triagem' | 'evolucao' | 'exames' | 'receituario' | 'atestado';
+type TabId = 'vacinacao' | 'triagem' | 'evolucao' | 'exames' | 'receituario' | 'atestado';
 const idade = (nasc?: string) => nasc ? Math.floor((Date.now() - new Date(nasc).getTime()) / 31557600000) : null;
 
 export function ProntuarioPage() {
@@ -110,11 +111,52 @@ export function ProntuarioPage() {
   };
 
   // exames / receituário / atestado (docs JSON)
-  const [exames, setExames] = useState<{ tipo: string; justificativa: string }[]>([]);
-  const [novoExame, setNovoExame] = useState({ tipo: '', justificativa: '' });
-  const [receita, setReceita] = useState<{ medicamento: string; posologia: string }[]>([]);
-  const [novoMed, setNovoMed] = useState({ medicamento: '', posologia: '' });
+  const [exames, setExames] = useState<{ tipo: string; justificativa: string; valor?: number }[]>([]);
+  const [novoExame, setNovoExame] = useState({ procedimento_id: '', tipo: '', justificativa: '', valor: '' });
+  const [receita, setReceita] = useState<{ medicamento: string; quantidade: string; posologia: string }[]>([]);
+  const [novoMed, setNovoMed] = useState({ medicamento: '', quantidade: '', posologia: '' });
   const [atestado, setAtestado] = useState({ dias: '', cid: '', texto: '' });
+
+  // Caderneta de vacinação (FHIR Immunization local)
+  const VACINA_VAZIA = { vacina: '', dose: '', data_aplicacao: '', lote: '', fabricante: '', via: '', local_aplicacao: '', aplicador: '', observacoes: '' };
+  const [vacinas, setVacinas] = useState<APIVacina[]>([]);
+  const [novaVacina, setNovaVacina] = useState({ ...VACINA_VAZIA });
+  const [salvandoVacina, setSalvandoVacina] = useState(false);
+  const setNV = (k: keyof typeof VACINA_VAZIA, v: string) => setNovaVacina(p => ({ ...p, [k]: v }));
+
+  const carregarVacinas = useCallback((pacienteId?: number) => {
+    if (!pacienteId) { setVacinas([]); return; }
+    vacinasApi.listar().then(todas => setVacinas(todas.filter(v => Number(v.paciente_id) === pacienteId))).catch(() => setVacinas([]));
+  }, []);
+
+  const addVacina = async () => {
+    if (!paciente || !novaVacina.vacina.trim()) return;
+    setSalvandoVacina(true);
+    try {
+      await vacinasApi.criar({ ...novaVacina, paciente_id: paciente.id, status: 'aplicada' });
+      setNovaVacina({ ...VACINA_VAZIA });
+      carregarVacinas(paciente.id);
+    } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao registrar vacina.'); }
+    finally { setSalvandoVacina(false); }
+  };
+  const excluirVacina = async (v: APIVacina) => {
+    if (!window.confirm(`Excluir o registro da vacina "${v.vacina}"?`)) return;
+    try { await vacinasApi.excluir(v.id); carregarVacinas(paciente?.id); } catch { /* ignore */ }
+  };
+
+  // Procedimentos (para exames: selecionar → puxa o valor)
+  const [procedimentos, setProcedimentos] = useState<APIProcedimento[]>([]);
+  // Autocomplete de medicamentos (via Memed)
+  const [medSugestoes, setMedSugestoes] = useState<{ id: string | number; nome: string }[]>([]);
+  const medDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const buscarMed = (q: string) => {
+    setNovoMed(m => ({ ...m, medicamento: q }));
+    if (medDebounce.current) clearTimeout(medDebounce.current);
+    if (q.trim().length < 2) { setMedSugestoes([]); return; }
+    medDebounce.current = setTimeout(() => {
+      memedApi.buscarMedicamentos(q).then(setMedSugestoes).catch(() => setMedSugestoes([]));
+    }, 350);
+  };
 
   // Prescrição digital Memed (integração homologada — hook compartilhado)
   const { pronto: memedPronto, erro: memedErro, iniciar: iniciarMemed, abrirPrescricao } = useMemed();
@@ -132,6 +174,7 @@ export function ProntuarioPage() {
 
   useEffect(() => { pacientesApi.listar().then(setPacientes).catch(() => {}); }, []);
   useEffect(() => { carregarModelos(); }, [carregarModelos]);
+  useEffect(() => { procedimentosApi.listar().then(setProcedimentos).catch(() => {}); }, []);
 
   const getImcClass = (val: number | null) => {
     if (!val) return '';
@@ -158,6 +201,7 @@ export function ProntuarioPage() {
 
   const abrirProntuario = async (p: APIPaciente) => {
     setPaciente(p); setActiveTab('triagem'); setTri({}); setExames([]); setReceita([]); setAtestado({ dias: '', cid: '', texto: '' });
+    carregarVacinas(p.id);
     // acha atendimento existente do paciente ou cria um novo
     const todos = await atendimentosClinicosApi.listar().catch(() => []);
     let atd = todos.find(a => a.paciente_id === p.id);
@@ -182,12 +226,45 @@ export function ProntuarioPage() {
     await evolucoesApi.criar({ atendimento_id: atendimentoId, texto_evolucao: novaEvolucao });
     setNovaEvolucao(''); setModeloSel(''); await carregarAtendimento(atendimentoId);
   };
-  const addExame = async () => { if (!novoExame.tipo) return; const arr = [...exames, novoExame]; setExames(arr); setNovoExame({ tipo: '', justificativa: '' }); await salvarDoc('exames', arr); };
-  const addMed = async () => { if (!novoMed.medicamento) return; const arr = [...receita, novoMed]; setReceita(arr); setNovoMed({ medicamento: '', posologia: '' }); await salvarDoc('receituario', arr); };
+  // Exames: ao escolher um procedimento, puxa nome e valor automaticamente
+  const selecionarProcExame = (id: string) => {
+    const p = procedimentos.find(x => String(x.id) === id);
+    setNovoExame(e => ({ ...e, procedimento_id: id, tipo: p ? p.nome : e.tipo, valor: p?.valor_padrao != null ? String(p.valor_padrao) : e.valor }));
+  };
+  const addExame = async () => {
+    if (!novoExame.tipo) return;
+    const item = { tipo: novoExame.tipo, justificativa: novoExame.justificativa, valor: novoExame.valor ? Number(novoExame.valor) : undefined };
+    const arr = [...exames, item]; setExames(arr);
+    setNovoExame({ procedimento_id: '', tipo: '', justificativa: '', valor: '' });
+    await salvarDoc('exames', arr);
+  };
+  const addMed = async () => {
+    if (!novoMed.medicamento) return;
+    const arr = [...receita, { ...novoMed }]; setReceita(arr);
+    setNovoMed({ medicamento: '', quantidade: '', posologia: '' }); setMedSugestoes([]);
+    await salvarDoc('receituario', arr);
+  };
   const salvarAtestado = async () => { await salvarDoc('atestado', atestado); alert('Atestado salvo!'); };
+
+  // Modelos prontos de atestado (já com dados do paciente/data)
+  const hojeBR = () => new Date().toLocaleDateString('pt-BR');
+  const horaBR = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const modeloAtestado = (tipo: 'comparecimento' | 'medico' | 'acompanhante') => {
+    const nome = paciente?.nome || '____________________';
+    const cpf = paciente?.cpf || '____________';
+    const dias = atestado.dias || '____';
+    const cid = atestado.cid ? ` (CID: ${atestado.cid})` : '';
+    const textos: Record<string, string> = {
+      comparecimento: `<p style="text-align:center"><strong>DECLARAÇÃO DE COMPARECIMENTO</strong></p><p>Declaro para os devidos fins que o(a) Sr(a). <strong>${nome}</strong>, CPF ${cpf}, compareceu a esta unidade de saúde no dia <strong>${hojeBR()}</strong>, no horário das <strong>${horaBR()}</strong>, para atendimento médico.</p><p>&nbsp;</p><p style="text-align:center">_______________________________<br>Assinatura e carimbo do médico</p>`,
+      medico: `<p style="text-align:center"><strong>ATESTADO MÉDICO</strong></p><p>Atesto para os devidos fins que o(a) paciente <strong>${nome}</strong>, CPF ${cpf}, necessita de <strong>${dias}</strong> dia(s) de afastamento de suas atividades a partir de <strong>${hojeBR()}</strong>, por motivo de doença${cid}.</p><p>&nbsp;</p><p style="text-align:center">_______________________________<br>Assinatura e carimbo do médico</p>`,
+      acompanhante: `<p style="text-align:center"><strong>DECLARAÇÃO DE ACOMPANHANTE</strong></p><p>Declaro que o(a) Sr(a). <strong>${nome}</strong>, CPF ${cpf}, acompanhou paciente em atendimento nesta unidade no dia <strong>${hojeBR()}</strong>, no horário das <strong>${horaBR()}</strong>, sendo necessária sua presença durante o atendimento.</p><p>&nbsp;</p><p style="text-align:center">_______________________________<br>Assinatura e carimbo do médico</p>`,
+    };
+    setAtestado(a => ({ ...a, texto: textos[tipo] }));
+  };
 
   const pFiltrados = pacientes.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()) || (p.cpf || '').includes(busca));
   const tabs = [
+    { id: 'vacinacao', label: 'Caderneta de Vacinação', icon: Syringe },
     { id: 'triagem', label: 'Triagem / Sinais Vitais', icon: Activity },
     { id: 'evolucao', label: 'Evolução Clínica', icon: ClipboardList },
     { id: 'exames', label: 'Exames Solicitados', icon: Stethoscope },
@@ -255,6 +332,52 @@ export function ProntuarioPage() {
           </div>
 
           <div className="p-6">
+            {activeTab === 'vacinacao' && (
+              <div className="space-y-5 animate-fade-in-up">
+                <div className="p-4 border border-gray-100 rounded-xl bg-gray-50/50 space-y-3">
+                  <h4 className="font-bold text-slate-700 text-sm flex items-center gap-2"><Syringe size={16} className="text-brand-primary" /> Registrar vacina</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                    <div className="md:col-span-4"><InputField label="Vacina *" placeholder="Ex: Hepatite B, Tríplice viral" value={novaVacina.vacina} onChange={e => setNV('vacina', e.target.value)} /></div>
+                    <div className="md:col-span-3"><InputField label="Dose" placeholder="1ª dose, reforço…" value={novaVacina.dose} onChange={e => setNV('dose', e.target.value)} /></div>
+                    <div className="md:col-span-2"><InputField label="Data" type="date" value={novaVacina.data_aplicacao} onChange={e => setNV('data_aplicacao', e.target.value)} /></div>
+                    <div className="md:col-span-3"><InputField label="Lote" placeholder="Nº do lote" value={novaVacina.lote} onChange={e => setNV('lote', e.target.value)} /></div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                    <div className="md:col-span-3"><InputField label="Fabricante" placeholder="Laboratório" value={novaVacina.fabricante} onChange={e => setNV('fabricante', e.target.value)} /></div>
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Via</label>
+                      <select value={novaVacina.via} onChange={e => setNV('via', e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/20">
+                        <option value="">—</option>{['Intramuscular', 'Subcutânea', 'Intradérmica', 'Oral'].map(v => <option key={v}>{v}</option>)}
+                      </select>
+                    </div>
+                    <div className="md:col-span-3"><InputField label="Local de aplicação" placeholder="Ex: Deltoide direito" value={novaVacina.local_aplicacao} onChange={e => setNV('local_aplicacao', e.target.value)} /></div>
+                    <div className="md:col-span-3"><InputField label="Aplicador" placeholder="Quem aplicou" value={novaVacina.aplicador} onChange={e => setNV('aplicador', e.target.value)} /></div>
+                    <div className="md:col-span-1 flex items-end"><Btn icon={Plus} onClick={addVacina} disabled={salvandoVacina || !novaVacina.vacina.trim()} className="w-full justify-center">Add</Btn></div>
+                  </div>
+                </div>
+
+                <div className="border border-gray-100 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 border-b border-gray-100"><tr>{['Vacina', 'Dose', 'Data', 'Lote', 'Via / Local', 'Aplicador', ''].map(h => <th key={h} className="p-3 text-slate-500 font-bold">{h}</th>)}</tr></thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {vacinas.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-slate-400">Nenhuma vacina registrada para este paciente.</td></tr>
+                        : [...vacinas].sort((a, b) => (b.data_aplicacao || '').localeCompare(a.data_aplicacao || '')).map(v => (
+                          <tr key={v.id}>
+                            <td className="p-3 font-medium text-slate-700">{v.vacina}</td>
+                            <td className="p-3 text-slate-500">{v.dose || '—'}</td>
+                            <td className="p-3 text-slate-500">{v.data_aplicacao ? v.data_aplicacao.split('-').reverse().join('/') : '—'}</td>
+                            <td className="p-3 text-slate-500">{v.lote || '—'}</td>
+                            <td className="p-3 text-slate-500">{[v.via, v.local_aplicacao].filter(Boolean).join(' · ') || '—'}</td>
+                            <td className="p-3 text-slate-500">{v.aplicador || '—'}</td>
+                            <td className="p-3 text-right"><button onClick={() => excluirVacina(v)} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button></td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {activeTab === 'triagem' && (
               <div className="space-y-6 animate-fade-in-up">
                 <h4 className="font-bold text-slate-700 text-sm border-b border-gray-100 pb-2">Sinais Vitais</h4>
@@ -348,34 +471,75 @@ export function ProntuarioPage() {
 
             {activeTab === 'exames' && (
               <div className="space-y-6 animate-fade-in-up">
-                <div className="flex gap-4 items-end">
-                  <div className="flex-1"><InputField label="Tipo de Exame" placeholder="Ex: Hemograma Completo" value={novoExame.tipo} onChange={e => setNovoExame({ ...novoExame, tipo: e.target.value })} /></div>
-                  <div className="flex-1"><InputField label="Justificativa Clínica" placeholder="CID ou motivo..." value={novoExame.justificativa} onChange={e => setNovoExame({ ...novoExame, justificativa: e.target.value })} /></div>
-                  <Btn icon={Plus} onClick={addExame}>Adicionar</Btn>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                  <div className="md:col-span-4">
+                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Procedimento (puxa o valor)</label>
+                    <select value={novoExame.procedimento_id} onChange={e => selecionarProcExame(e.target.value)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary">
+                      <option value="">Selecione ou digite manualmente…</option>
+                      {procedimentos.map(p => <option key={p.id} value={p.id}>{p.nome}{p.valor_padrao != null ? ` — R$ ${Number(p.valor_padrao).toFixed(2)}` : ''}</option>)}
+                    </select>
+                  </div>
+                  <div className="md:col-span-3"><InputField label="Exame" placeholder="Ex: Hemograma" value={novoExame.tipo} onChange={e => setNovoExame({ ...novoExame, tipo: e.target.value })} /></div>
+                  <div className="md:col-span-3"><InputField label="Justificativa (CID/motivo)" placeholder="Motivo clínico" value={novoExame.justificativa} onChange={e => setNovoExame({ ...novoExame, justificativa: e.target.value })} /></div>
+                  <div className="md:col-span-1"><InputField label="Valor (R$)" type="number" step="0.01" placeholder="0,00" value={novoExame.valor} onChange={e => setNovoExame({ ...novoExame, valor: e.target.value })} /></div>
+                  <div className="md:col-span-1"><Btn icon={Plus} onClick={addExame} className="w-full justify-center">Add</Btn></div>
                 </div>
                 <div className="border border-gray-100 rounded-xl overflow-hidden">
                   <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 border-b border-gray-100"><tr><th className="p-3 text-slate-500 font-bold">Exame</th><th className="p-3 text-slate-500 font-bold">Justificativa</th><th className="p-3"></th></tr></thead>
+                    <thead className="bg-gray-50 border-b border-gray-100"><tr><th className="p-3 text-slate-500 font-bold">Exame</th><th className="p-3 text-slate-500 font-bold">Justificativa</th><th className="p-3 text-slate-500 font-bold text-right">Valor</th><th className="p-3"></th></tr></thead>
                     <tbody className="divide-y divide-gray-50">
-                      {exames.length === 0 ? <tr><td colSpan={3} className="p-8 text-center text-slate-400">Nenhum exame adicionado.</td></tr>
-                        : exames.map((ex, i) => <tr key={i}><td className="p-3 font-medium text-slate-700">{ex.tipo}</td><td className="p-3 text-slate-500">{ex.justificativa || '—'}</td><td className="p-3 text-right"><button onClick={() => { const arr = exames.filter((_, j) => j !== i); setExames(arr); salvarDoc('exames', arr); }} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button></td></tr>)}
+                      {exames.length === 0 ? <tr><td colSpan={4} className="p-8 text-center text-slate-400">Nenhum exame adicionado.</td></tr>
+                        : exames.map((ex, i) => <tr key={i}><td className="p-3 font-medium text-slate-700">{ex.tipo}</td><td className="p-3 text-slate-500">{ex.justificativa || '—'}</td><td className="p-3 text-right font-semibold text-emerald-600">{ex.valor != null ? `R$ ${Number(ex.valor).toFixed(2).replace('.', ',')}` : '—'}</td><td className="p-3 text-right"><button onClick={() => { const arr = exames.filter((_, j) => j !== i); setExames(arr); salvarDoc('exames', arr); }} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button></td></tr>)}
                     </tbody>
                   </table>
                 </div>
+                {exames.length > 0 && (
+                  <div className="flex justify-end text-sm font-bold text-slate-700">
+                    Total dos exames:&nbsp;<span className="text-emerald-700">R$ {exames.reduce((s, e) => s + (Number(e.valor) || 0), 0).toFixed(2).replace('.', ',')}</span>
+                  </div>
+                )}
               </div>
             )}
 
             {activeTab === 'receituario' && (
               <div className="space-y-6 animate-fade-in-up">
-                <div className="flex gap-4 items-end">
-                  <div className="flex-1"><InputField label="Medicamento" placeholder="Nome e concentração" value={novoMed.medicamento} onChange={e => setNovoMed({ ...novoMed, medicamento: e.target.value })} /></div>
-                  <div className="flex-1"><InputField label="Posologia" placeholder="Ex: 1 comp 8/8h por 5 dias" value={novoMed.posologia} onChange={e => setNovoMed({ ...novoMed, posologia: e.target.value })} /></div>
-                  <Btn icon={Plus} onClick={addMed}>Adicionar</Btn>
+                <div className="p-4 border border-gray-100 rounded-xl bg-gray-50/50 space-y-3">
+                  {/* Nome + Quantidade lado a lado */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                    <div className="md:col-span-8 relative">
+                      <InputField label="Medicamento" placeholder="Nome e concentração (busca na Memed)" value={novoMed.medicamento} onChange={e => buscarMed(e.target.value)} />
+                      {medSugestoes.length > 0 && (
+                        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                          {medSugestoes.map(s => (
+                            <button key={s.id} onClick={() => { setNovoMed(m => ({ ...m, medicamento: s.nome })); setMedSugestoes([]); }}
+                              className="w-full text-left px-4 py-2 text-sm hover:bg-brand-light/30 flex items-center gap-2">
+                              <Pill size={13} className="text-brand-primary" />{s.nome}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="md:col-span-4"><InputField label="Quantidade" placeholder="Ex: 1 caixa / 30 comp" value={novoMed.quantidade} onChange={e => setNovoMed({ ...novoMed, quantidade: e.target.value })} /></div>
+                  </div>
+                  {/* Posologia embaixo */}
+                  <div className="flex gap-3 items-end">
+                    <div className="flex-1"><InputField label="Posologia" placeholder="Ex: 1 comprimido de 8/8h por 5 dias" value={novoMed.posologia} onChange={e => setNovoMed({ ...novoMed, posologia: e.target.value })} /></div>
+                    <Btn icon={Plus} onClick={addMed}>Adicionar</Btn>
+                  </div>
                 </div>
                 <div className="bg-[#fefce8] border border-[#fef08a] rounded-xl p-5 shadow-sm min-h-[200px] font-serif text-slate-800">
                   <h3 className="text-center font-bold text-lg border-b border-[#fde047] pb-2 mb-4">RECEITUÁRIO MÉDICO</h3>
                   {receita.length === 0 ? <p className="text-sm italic text-slate-500 text-center mb-8">Nenhum medicamento prescrito.</p>
-                    : <ol className="list-decimal pl-6 space-y-2">{receita.map((m, i) => <li key={i} className="text-sm"><strong>{m.medicamento}</strong> — {m.posologia} <button onClick={() => { const arr = receita.filter((_, j) => j !== i); setReceita(arr); salvarDoc('receituario', arr); }} className="text-red-400 hover:text-red-600 ml-2 not-italic">✕</button></li>)}</ol>}
+                    : <ol className="list-decimal pl-6 space-y-3">{receita.map((m, i) => (
+                        <li key={i} className="text-sm">
+                          <div className="flex items-start justify-between gap-2">
+                            <span><strong>{m.medicamento}</strong>{m.quantidade ? ` — ${m.quantidade}` : ''}</span>
+                            <button onClick={() => { const arr = receita.filter((_, j) => j !== i); setReceita(arr); salvarDoc('receituario', arr); }} className="text-red-400 hover:text-red-600 not-italic shrink-0">✕</button>
+                          </div>
+                          {m.posologia && <div className="text-xs text-slate-600 mt-0.5 pl-1">{m.posologia}</div>}
+                        </li>
+                      ))}</ol>}
                 </div>
 
                 {/* Prescrição Digital (Memed) */}
@@ -402,19 +566,27 @@ export function ProntuarioPage() {
             )}
 
             {activeTab === 'atestado' && (
-              <div className="space-y-6 animate-fade-in-up">
+              <div className="space-y-5 animate-fade-in-up">
                 <div className="grid grid-cols-3 gap-4">
                   <InputField label="Dias de Repouso" type="number" placeholder="Qtd de dias" value={atestado.dias} onChange={e => setAtestado({ ...atestado, dias: e.target.value })} />
                   <InputField label="CID (Opcional)" placeholder="Código CID-10" value={atestado.cid} onChange={e => setAtestado({ ...atestado, cid: e.target.value })} />
                   <div />
                 </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-slate-500">Modelos:</span>
+                  <Btn size="sm" variant="outline" onClick={() => modeloAtestado('medico')}>Atestado médico</Btn>
+                  <Btn size="sm" variant="outline" onClick={() => modeloAtestado('comparecimento')}>Comparecimento</Btn>
+                  <Btn size="sm" variant="outline" onClick={() => modeloAtestado('acompanhante')}>Acompanhante</Btn>
+                  <span className="text-[11px] text-slate-400">— já preenche nome, CPF, data e hora do paciente</span>
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Texto do Atestado</label>
-                  <textarea rows={5} value={atestado.texto} onChange={e => setAtestado({ ...atestado, texto: e.target.value })}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
-                    placeholder={`Atesto para os devidos fins que ${paciente.nome} necessita de [X] dias de repouso a partir desta data.`} />
+                  <div className="bg-white rounded-xl overflow-hidden border border-gray-200">
+                    <ReactQuill theme="snow" value={atestado.texto} onChange={v => setAtestado(a => ({ ...a, texto: v }))} modules={QUILL_MODULES}
+                      className="h-56 mb-12" placeholder="Escolha um modelo acima ou escreva o atestado…" />
+                  </div>
                 </div>
-                <div className="flex justify-end"><Btn onClick={salvarAtestado}>Salvar Atestado</Btn></div>
+                <div className="flex justify-end"><Btn icon={Save} onClick={salvarAtestado}>Salvar Atestado</Btn></div>
               </div>
             )}
           </div>

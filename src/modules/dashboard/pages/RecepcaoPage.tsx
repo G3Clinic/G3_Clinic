@@ -67,12 +67,13 @@ export function RecepcaoPage() {
     catch (e) { alert(e instanceof Error ? e.message : 'Erro.'); }
   };
 
-  // Finalizar: lança automaticamente no caixa do dia + auditoria (via backend)
+  // Finalizar: caixa só se pago; senão vira "pendente de pagamento" (via backend)
   const finalizar = async (a: APIAgendamento) => {
     try {
       const r = await finalizarAtendimento(a.id);
       carregar();
-      if (r.caixa_lancamento_id) alert('Atendimento finalizado e lançado no caixa do dia.');
+      if (r.status_pagamento === 'pago') alert('Atendimento finalizado e lançado no caixa do dia.');
+      else alert('Atendimento finalizado — PENDENTE DE PAGAMENTO. Dê baixa em Financeiro → Recebimentos quando o paciente pagar.');
     } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao finalizar atendimento.'); }
   };
 
