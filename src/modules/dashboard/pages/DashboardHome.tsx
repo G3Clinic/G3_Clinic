@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Filter, Download, Building2, ChevronDown, AlertTriangle, Droplets, Calendar, Check, Users, MapPin, Activity } from 'lucide-react';
-import { OperationsChart } from '../components/OperationsChart';
-import { StockDistributionChart } from '../components/StockDistributionChart';
+import { Filter, Download, Building2, ChevronDown, AlertTriangle, Check, Activity } from 'lucide-react';
 
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const;
 type BloodType = typeof BLOOD_TYPES[number];

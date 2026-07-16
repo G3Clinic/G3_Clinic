@@ -2,10 +2,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import {
   Home, Users, Calendar, MonitorPlay, ClipboardList,
-  Smile, DollarSign, Package, BarChart2, TrendingUp,
-  FileSearch, Building2, DoorOpen, Stethoscope, HeartPulse,
-  Handshake, PieChart, Repeat2, Settings, LogOut, X, ChevronDown,
-  Landmark, Database, DownloadCloud, UploadCloud
+  Smile, DollarSign, Package, BarChart2, HeartPulse, Settings, LogOut, X, ChevronDown,
+  Landmark, Database
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useTheme } from '../../../contexts/ThemeContext';

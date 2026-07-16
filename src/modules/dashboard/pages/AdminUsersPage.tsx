@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, User, Shield, Key, Edit, Trash2, CheckCircle2, X } from 'lucide-react';
+import { Search, Plus, User, Shield, Key, Edit, Trash2, X } from 'lucide-react';
 
 const API_URL = 'http://localhost:5000/api';
 

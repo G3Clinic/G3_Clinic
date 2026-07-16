@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Save, User, Phone, MapPin, Calendar, CheckSquare, CheckCircle2, FileText, Users } from 'lucide-react';
+import { Save, User, MapPin, Calendar, CheckSquare, CheckCircle2, FileText, Users } from 'lucide-react';
 
 // Funções de Máscara
 const maskCPF = (value: string) => value.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})/, '$1-$2').replace(/(-\d{2})\d+?$/, '$1');

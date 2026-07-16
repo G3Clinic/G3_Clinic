@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { BarChart, Users, FileText, Calendar, DollarSign, Activity, FileSpreadsheet, Download, RefreshCcw, Search, ChevronRight, Stethoscope, Microscope, TrendingUp, AlertTriangle } from 'lucide-react';
+import { BarChart, Users, FileText, Calendar, DollarSign, Activity, RefreshCcw, Search, Stethoscope, Microscope, TrendingUp, AlertTriangle } from 'lucide-react';
 import { PageHeader, Card, Btn, StatsCard, SelectField, InputField } from '../../../components/ui/shared';
 import {
   agendamentosApi, recebimentosApi, conveniosApi, procedimentosApi, usuariosApi,

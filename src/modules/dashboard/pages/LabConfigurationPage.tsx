@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Save, Plus, Trash2, FlaskConical, CheckCircle2, Activity } from 'lucide-react';
 
 export interface LabExam {

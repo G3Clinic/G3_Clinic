@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FlaskConical, CheckCircle2, XCircle, AlertTriangle, FileText, Microscope, TestTube2, X, RefreshCw } from 'lucide-react';
+import { FlaskConical, CheckCircle2, XCircle, AlertTriangle, Microscope, TestTube2, X, RefreshCw } from 'lucide-react';
 import { DEFAULT_EXAMS } from './LabConfigurationPage';
 
 interface LabBag {

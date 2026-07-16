@@ -29,7 +29,7 @@ function tempoRelativo(iso?: string | null): string {
 
 export function Topbar({ onOpenSidebar }: TopbarProps) {
   const navigate = useNavigate();
-  const { theme } = useTheme();
+  const {} = useTheme();
   const { user, logout } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);

@@ -496,7 +496,7 @@ export const documentosApi = crudApi<APIDocumento>('documentos_atendimento');
 export interface APIOrcamento { id: string; paciente_id?: number | null; profissional_id?: string | null; valor_total?: number | null; status_geral?: string | null; data_criacao?: string | null; }
 export const orcamentosApi = crudApi<APIOrcamento>('orcamentos');
 
-export interface APIOrcamentoItem { id: string; orcamento_id?: string | null; dente_numero?: string | null; faces?: string | null; procedimento_id?: string | null; valor_cobrado?: number | null; status_item?: string | null; status_visual?: string | null; }
+export interface APIOrcamentoItem { id: string; orcamento_id?: string | null; dente_numero?: string | null; faces?: string | null; procedimento_id?: string | null; valor_cobrado?: number | null; status_item?: string | null; status_visual?: string | null; odonto_procedimentos?: any; }
 export const orcamentoItensApi = crudApi<APIOrcamentoItem>('orcamento_itens');
 
 // Finaliza orçamento (cria orçamento + itens + recebimento pendente — regra de negócio)

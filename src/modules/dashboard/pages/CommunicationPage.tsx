@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Send, Users, Filter, MessageSquare, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Send, Users, Filter, MessageSquare, CheckCircle2 } from 'lucide-react';
 
 const API_URL = 'http://localhost:5000/api';
 

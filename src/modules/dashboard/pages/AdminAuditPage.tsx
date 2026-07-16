@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Calendar, ShieldAlert, FileText, User, ArrowDownUp, Info } from 'lucide-react';
+import { Search, Calendar, ShieldAlert, FileText, Info } from 'lucide-react';
 
 const API_URL = 'http://localhost:5000/api';
 

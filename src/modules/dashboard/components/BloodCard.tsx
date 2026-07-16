@@ -1,4 +1,4 @@
-import { AlertTriangle, Droplets } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 export type BloodType = 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
 export type StockStatus = 'critical' | 'warning' | 'stable';

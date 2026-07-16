@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Save, AlertTriangle, CheckCircle2, RotateCcw, Sliders, Activity } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, CheckCircle2, RotateCcw, Sliders, Activity } from 'lucide-react';
 
 interface BloodLevelConfig {
   type: string;
