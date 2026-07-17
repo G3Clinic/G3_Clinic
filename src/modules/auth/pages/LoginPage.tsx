@@ -52,15 +52,13 @@ export function LoginPage() {
       <div className="absolute inset-0 bg-white/60 backdrop-blur-sm pointer-events-none"></div>
 
       <div className="relative w-full max-w-md z-10 flex flex-col items-center">
-        <div className="text-center mb-6 flex flex-col items-center">
-          <div className="w-24 h-24 mb-3">
-            <img src="/logo.png" alt="G3 Clinic Logo" className="w-full h-full object-contain drop-shadow-md" />
-          </div>
-          <h1 className="text-2xl font-bold text-emerald-900 drop-shadow-sm">G3 Clinic</h1>
-          <p className="text-emerald-800/80 text-sm mt-1 font-medium drop-shadow-sm">Painel de Gestão Operacional</p>
-        </div>
-
         <div className="bg-white/80 backdrop-blur-md border border-white/60 rounded-3xl p-8 shadow-2xl shadow-emerald-900/10 w-full">
+          <div className="flex justify-center mb-6">
+            <div className="w-32 h-32">
+              <img src="/logo.png" alt="G3 Clinic Logo" className="w-full h-full object-contain drop-shadow-sm" />
+            </div>
+          </div>
+
           <h2 className="text-xl font-bold text-emerald-900 mb-1">
             {mode === 'login' ? 'Bem-vindo de volta' : 'Criar conta da empresa'}
           </h2>
