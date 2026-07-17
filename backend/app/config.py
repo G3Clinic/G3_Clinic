@@ -33,11 +33,16 @@ class Settings:
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "720"))  # 12h
 
-    # CORS (origens do frontend, separadas por vírgula)
-    CORS_ORIGINS: list[str] = os.getenv(
-        "CORS_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173",
-    ).split(",")
+    # CORS (origens do frontend, separadas por vírgula). O default já inclui os
+    # domínios de produção; a env var CORS_ORIGINS (Railway) sobrescreve se definida.
+    CORS_ORIGINS: list[str] = [
+        o.strip() for o in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:5173,http://127.0.0.1:5173,"
+            "https://g3-clinic.vercel.app,"
+            "https://g3clinic.com.br,https://www.g3clinic.com.br",
+        ).split(",") if o.strip()
+    ]
 
     PUBLIC_URL: str = os.getenv("PUBLIC_URL", "http://localhost:8000")
 
