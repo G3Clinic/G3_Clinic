@@ -150,16 +150,16 @@ export function OdontogramaPage() {
     historico.forEach(({ itens: its }) => its.forEach(it => {
       const d = Number(it.dente_numero);
       if (!d) return;
-      const tv = it.odonto_procedimentos?.tipo_visual || 'nenhum';
+      const tv = procs.find(p => p.id === it.procedimento_id)?.tipo_visual || 'nenhum';
       mapa[d] = mapa[d] || [];
-      mapa[d].push({ 
-        faces: it.faces || '', 
+      mapa[d].push({
+        faces: it.faces || '',
         cor: COR_STATUS[it.status_visual || 'a_realizar'] || COR_STATUS.a_realizar,
         tipoVisual: tv === 'nenhum' ? 'tratado' : tv
       });
     }));
     return mapa;
-  }, [historico]);
+  }, [historico, procs]);
 
   // estado do carrinho atual (a_realizar por padrão, já com a cor do status escolhido)
   const estadoCarrinho = useMemo(() => {
