@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Palette, Save, Image as ImageIcon, UploadCloud, RefreshCcw } from 'lucide-react';
 import { PageHeader, Card, Btn, InputField } from '../../../components/ui/shared';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { uploadArquivo, configApi } from '../../../services/api';
+import { configApi } from '../../../services/api';
 
 export function AdminIdentidadePage() {
   const { theme, updateTheme } = useTheme();
@@ -38,16 +38,26 @@ export function AdminIdentidadePage() {
   }, []);
 
   const handleFileUpload = async (file: File, type: 'full' | 'icon') => {
+    // Logos são arquivos pequenos: guardamos como data-URL (base64) dentro do tema
+    // salvo no banco. Assim não dependem de arquivos no servidor (o filesystem do
+    // Railway é efêmero e some a cada deploy) nem de PUBLIC_URL/origem correta.
+    if (file.size > 1.5 * 1024 * 1024) {
+      alert('Imagem muito grande (máx. 1,5 MB). Envie uma versão otimizada/menor.');
+      return;
+    }
     setIsUploading(true);
     try {
-      const data = await uploadArquivo(file);
-      if (data.url) {
-        if (type === 'full') { setLogoFullUrl(data.url); setLogoFullBroken(false); }
-        if (type === 'icon') { setLogoIconUrl(data.url); setLogoIconBroken(false); }
-      }
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+      if (type === 'full') { setLogoFullUrl(dataUrl); setLogoFullBroken(false); }
+      if (type === 'icon') { setLogoIconUrl(dataUrl); setLogoIconBroken(false); }
     } catch (error) {
-      console.error("Erro ao enviar imagem:", error);
-      alert("Erro ao enviar imagem. Verifique se o backend está rodando.");
+      console.error("Erro ao processar imagem:", error);
+      alert("Não foi possível ler a imagem. Tente outro arquivo.");
     } finally {
       setIsUploading(false);
     }
@@ -56,8 +66,13 @@ export function AdminIdentidadePage() {
   const handleSave = async () => {
     const tema = { primaryColor, sidebarColor, topbarColor, logoFullUrl, logoIconUrl, companyName };
     updateTheme(tema);
-    try { await configApi.salvar('tema', tema); } catch { /* mantém local se falhar */ }
-    alert('Identidade visual atualizada com sucesso!');
+    try {
+      await configApi.salvar('tema', tema);
+      alert('Identidade visual atualizada com sucesso!');
+    } catch (e) {
+      console.error('Falha ao salvar tema no servidor:', e);
+      alert('Aplicado nesta sessão, mas não foi possível salvar no servidor. Tente novamente.');
+    }
   };
 
   const handleReset = () => {
