@@ -25,6 +25,9 @@ app = FastAPI(title="API da Clínica (SaaS multi-tenant)")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
+    # Libera qualquer deploy *.vercel.app (inclui previews) e os domínios g3clinic,
+    # independente da env var CORS_ORIGINS do Railway (é uma condição adicional).
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*(vercel\.app|g3clinic\.com\.br)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
