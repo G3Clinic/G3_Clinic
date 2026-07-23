@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Stethoscope, Clock, CheckCircle2, UserX, UserCheck, DollarSign } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Stethoscope, Clock, CheckCircle2, UserX, UserCheck, DollarSign, FileText } from 'lucide-react';
 import { PageHeader, Card, StatsCard, Badge, Modal, InputField, SelectField, Btn } from '../../../components/ui/shared';
 import {
   agendamentosApi, pacientesApi, procedimentosApi, conveniosApi, usuariosApi, recebimentosApi, finalizarAtendimento,
@@ -13,7 +14,8 @@ const CORES_STATUS: Record<string, 'blue' | 'yellow' | 'green' | 'red' | 'gray'>
 const PAGAMENTOS = ['Dinheiro', 'PIX', 'Cartão de Crédito', 'Cartão de Débito'];
 
 export function RecepcaoPage() {
-  const [dataFiltro, setDataFiltro] = useState(new Date().toISOString().split('T')[0]);
+  const navigate = useNavigate();
+  const [dataFiltro, setDataFiltro] = useState(new Date().toISOString().slice(0, 10));
   const [ags, setAgs] = useState<APIAgendamento[]>([]);
   const [pacientes, setPacientes] = useState<APIPaciente[]>([]);
   const [procedimentos, setProcedimentos] = useState<APIProcedimento[]>([]);
@@ -133,6 +135,7 @@ export function RecepcaoPage() {
                     <td className="px-4 py-4"><Badge color={CORES_STATUS[st] || 'gray'}>{st}</Badge></td>
                     <td className="px-4 py-4">
                       <div className="flex gap-1">
+                        <button title="Ficha do Paciente (Prontuário)" onClick={() => navigate('/dashboard/prontuario')} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded transition-colors"><FileText size={18} /></button>
                         {['Agendado', 'Confirmado'].includes(st) && <button title="Marcar Presença" onClick={() => mudarStatus(a, 'Aguardando na Recepção')} className="p-1.5 text-amber-500 hover:bg-amber-50 rounded transition-colors"><UserCheck size={18} /></button>}
                         {st === 'Aguardando na Recepção' && <button title={a.convenio_id || estaPago(a.id) ? 'Iniciar Atendimento' : 'Requer pagamento antes de liberar'} onClick={() => iniciarAtendimento(a)} className={`p-1.5 rounded transition-colors ${a.convenio_id || estaPago(a.id) ? 'text-emerald-500 hover:bg-emerald-50' : 'text-slate-300 hover:bg-amber-50'}`}><Stethoscope size={18} /></button>}
                         {st === 'Em Atendimento' && <button title="Finalizar (lança no caixa)" onClick={() => finalizar(a)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded transition-colors"><CheckCircle2 size={18} /></button>}

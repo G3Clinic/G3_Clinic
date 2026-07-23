@@ -119,6 +119,45 @@ export function AgendaPage() {
 
   const setCampo = (c: keyof Form, v: string) => setForm(prev => ({ ...prev, [c]: v }));
 
+  const handleProcedimentoChange = (procId: string) => {
+    const proc = procedimentos.find(p => p.id === procId);
+    setForm(prev => {
+      const updates: Partial<Form> = { procedimento_id: procId };
+      if (proc) {
+        if (!prev.valor_cobrado) updates.valor_cobrado = proc.valor_padrao != null ? String(proc.valor_padrao) : '';
+        if (prev.hora_inicio && proc.duracao) {
+          const [h, m] = prev.hora_inicio.split(':').map(Number);
+          if (!isNaN(h) && !isNaN(m)) {
+            const totalMin = h * 60 + m + proc.duracao;
+            const endH = Math.floor(totalMin / 60);
+            const endM = totalMin % 60;
+            updates.hora_fim = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+          }
+        }
+      }
+      return { ...prev, ...updates };
+    });
+  };
+
+  const handleHoraInicioChange = (hora: string) => {
+    setForm(prev => {
+      const updates: Partial<Form> = { hora_inicio: hora };
+      if (hora && prev.procedimento_id) {
+        const proc = procedimentos.find(p => p.id === prev.procedimento_id);
+        if (proc && proc.duracao) {
+          const [h, m] = hora.split(':').map(Number);
+          if (!isNaN(h) && !isNaN(m)) {
+            const totalMin = h * 60 + m + proc.duracao;
+            const endH = Math.floor(totalMin / 60);
+            const endM = totalMin % 60;
+            updates.hora_fim = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+          }
+        }
+      }
+      return { ...prev, ...updates };
+    });
+  };
+
   // Criação rápida de paciente dentro do modal de agendamento
   const [novoPacOpen, setNovoPacOpen] = useState(false);
   const [novoPac, setNovoPac] = useState({ nome: '', cpf: '', telefone: '', data_nascimento: '', sexo: '' });
@@ -456,21 +495,15 @@ export function AgendaPage() {
                 </option>
               ))}
             </SelectField>
-            <SelectField label="Procedimento" value={form.procedimento_id} onChange={e => setCampo('procedimento_id', e.target.value)}>
+            <SelectField label="Procedimento" value={form.procedimento_id} onChange={e => handleProcedimentoChange(e.target.value)}>
               <option value="">Selecione...</option>
               {procedimentos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
             </SelectField>
           </div>
           <div className="grid grid-cols-3 gap-4">
             <InputField label="Data *" type="date" required value={form.data_agendamento} onChange={e => setCampo('data_agendamento', e.target.value)} />
-            <SelectField label="Início *" required value={form.hora_inicio} onChange={e => setCampo('hora_inicio', e.target.value)}>
-              <option value="">--:--</option>
-              {HORARIOS.map(h => <option key={h} value={h}>{h}</option>)}
-            </SelectField>
-            <SelectField label="Fim" value={form.hora_fim} onChange={e => setCampo('hora_fim', e.target.value)}>
-              <option value="">--:--</option>
-              {HORARIOS.map(h => <option key={h} value={h}>{h}</option>)}
-            </SelectField>
+            <InputField label="Início *" type="time" required value={form.hora_inicio} onChange={e => handleHoraInicioChange(e.target.value)} />
+            <InputField label="Fim" type="time" value={form.hora_fim} onChange={e => setCampo('hora_fim', e.target.value)} />
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1.5">Observações</label>

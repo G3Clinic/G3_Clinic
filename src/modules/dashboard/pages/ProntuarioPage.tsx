@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ClipboardList, Search, User, FileText, Activity, Stethoscope, FileSymlink, AlertCircle, Plus, Trash2, Pill, BookText, Save, Edit2, Settings, ChevronRight, Syringe } from 'lucide-react';
+import { ClipboardList, Search, User, FileText, Activity, Stethoscope, FileSymlink, AlertCircle, Plus, Trash2, Pill, BookText, Save, Edit2, Settings, ChevronRight, Syringe, AlertTriangle } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, InputField, Modal } from '../../../components/ui/shared';
 import {
   pacientesApi, atendimentosClinicosApi, evolucoesApi, documentosApi, modelosProntuarioApi,
-  procedimentosApi, memedApi, vacinasApi,
+  procedimentosApi, memedApi, vacinasApi, configApi,
   type APIPaciente, type APIEvolucao, type APIModeloProntuario, type APIProcedimento, type APIVacina,
 } from '../../../services/api';
 import ReactQuill from 'react-quill-new';
@@ -31,11 +31,19 @@ export function ProntuarioPage() {
   const [paciente, setPaciente] = useState<APIPaciente | null>(null);
   const [atendimentoId, setAtendimentoId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('triagem');
+  const [anamnese, setAnamnese] = useState<any>(null);
 
   // triagem
   const [tri, setTri] = useState<Record<string, string>>({});
   const setT = (k: string, v: string) => setTri(p => ({ ...p, [k]: v }));
-  const imc = (() => { const p = parseFloat(tri.peso), a = parseFloat(tri.altura); return p > 0 && a > 0 ? p / (a * a) : null; })();
+  const imc = (() => { 
+    const p = parseFloat(tri.peso), a = parseFloat(tri.altura); 
+    if (p > 0 && a > 0) {
+      const aMetros = a / 100;
+      return p / (aMetros * aMetros);
+    }
+    return null;
+  })();
 
   // evolução (editor rico + modelos HTML)
   const [evolucoes, setEvolucoes] = useState<APIEvolucao[]>([]);
@@ -111,8 +119,7 @@ export function ProntuarioPage() {
   };
 
   // exames / receituário / atestado (docs JSON)
-  const [exames, setExames] = useState<{ tipo: string; justificativa: string; valor?: number }[]>([]);
-  const [novoExame, setNovoExame] = useState({ procedimento_id: '', tipo: '', justificativa: '', valor: '' });
+  const [exames, setExames] = useState<string>('');
   const [receita, setReceita] = useState<{ medicamento: string; quantidade: string; posologia: string }[]>([]);
   const [novoMed, setNovoMed] = useState({ medicamento: '', quantidade: '', posologia: '' });
   const [atestado, setAtestado] = useState({ dias: '', cid: '', texto: '' });
@@ -166,6 +173,14 @@ export function ProntuarioPage() {
 
   const abrirPrescricaoMemed = () => {
     if (!paciente) return;
+    if (!paciente.cpf) {
+      alert('É necessário informar o CPF do paciente para emitir a prescrição digital.');
+      return;
+    }
+    if (!paciente.endereco || !paciente.bairro || !paciente.cidade || !paciente.uf) {
+      alert('É necessário informar o endereço completo (Rua, Bairro, Cidade e UF) do paciente para emitir a prescrição digital.');
+      return;
+    }
     abrirPrescricao(
       { id: paciente.id, nome: paciente.nome, sexo: paciente.sexo, cpf: paciente.cpf, data_nascimento: paciente.data_nascimento, telefone: paciente.telefone, email: paciente.email },
       { nome: 'Clínica', uf: paciente.uf || undefined, cidade: paciente.cidade || undefined },
@@ -194,14 +209,20 @@ export function ProntuarioPage() {
     const docs = await documentosApi.listar().catch(() => []);
     const meus = docs.filter(d => d.atendimento_id === atdId);
     const dTri = meus.find(d => d.tipo === 'triagem'); if (dTri?.conteudo) setTri(dTri.conteudo);
-    const dEx = meus.find(d => d.tipo === 'exames'); setExames(dEx?.conteudo || []);
+    const dEx = meus.find(d => d.tipo === 'exames'); 
+    if (Array.isArray(dEx?.conteudo)) {
+      setExames(dEx?.conteudo.map((e: any) => `- ${e.tipo} (Justificativa: ${e.justificativa || 'Nenhuma'})`).join('\n') || '');
+    } else {
+      setExames(dEx?.conteudo || '');
+    }
     const dRec = meus.find(d => d.tipo === 'receituario'); setReceita(dRec?.conteudo || []);
     const dAt = meus.find(d => d.tipo === 'atestado'); if (dAt?.conteudo) setAtestado(dAt.conteudo);
   }, []);
 
   const abrirProntuario = async (p: APIPaciente) => {
-    setPaciente(p); setActiveTab('triagem'); setTri({}); setExames([]); setReceita([]); setAtestado({ dias: '', cid: '', texto: '' });
+    setPaciente(p); setActiveTab('triagem'); setTri({}); setExames(''); setReceita([]); setAtestado({ dias: '', cid: '', texto: '' });
     carregarVacinas(p.id);
+    configApi.obter(`anamnese:${p.id}`).then(v => setAnamnese(v || null)).catch(() => setAnamnese(null));
     // acha atendimento existente do paciente ou cria um novo
     const todos = await atendimentosClinicosApi.listar().catch(() => []);
     let atd = todos.find(a => a.paciente_id === p.id);
@@ -226,18 +247,7 @@ export function ProntuarioPage() {
     await evolucoesApi.criar({ atendimento_id: atendimentoId, texto_evolucao: novaEvolucao });
     setNovaEvolucao(''); setModeloSel(''); await carregarAtendimento(atendimentoId);
   };
-  // Exames: ao escolher um procedimento, puxa nome e valor automaticamente
-  const selecionarProcExame = (id: string) => {
-    const p = procedimentos.find(x => String(x.id) === id);
-    setNovoExame(e => ({ ...e, procedimento_id: id, tipo: p ? p.nome : e.tipo, valor: p?.valor_padrao != null ? String(p.valor_padrao) : e.valor }));
-  };
-  const addExame = async () => {
-    if (!novoExame.tipo) return;
-    const item = { tipo: novoExame.tipo, justificativa: novoExame.justificativa, valor: novoExame.valor ? Number(novoExame.valor) : undefined };
-    const arr = [...exames, item]; setExames(arr);
-    setNovoExame({ procedimento_id: '', tipo: '', justificativa: '', valor: '' });
-    await salvarDoc('exames', arr);
-  };
+  // Exames: agora texto livre
   const addMed = async () => {
     if (!novoMed.medicamento) return;
     const arr = [...receita, { ...novoMed }]; setReceita(arr);
@@ -311,7 +321,7 @@ export function ProntuarioPage() {
                     <div key={p.id} onClick={() => abrirProntuario(p)} className="flex items-center justify-between p-3 border border-gray-100 rounded-xl hover:border-brand-primary hover:bg-brand-light/10 cursor-pointer transition-all bg-white group">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-brand-light text-brand-primary rounded-full flex items-center justify-center font-bold text-sm">{p.nome.substring(0, 2).toUpperCase()}</div>
-                        <div><p className="font-bold text-slate-800 group-hover:text-brand-primary transition-colors">{p.nome}</p><div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5"><span>CPF: {p.cpf}</span>{idade(p.data_nascimento) != null && <><span>•</span><span>{idade(p.data_nascimento)} anos</span></>}</div></div>
+                        <div><p className="font-bold text-slate-800 group-hover:text-brand-primary transition-colors">{p.nome}</p><div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5"><span>CPF: {p.cpf}</span>{idade(paciente?.data_nascimento) != null && <><span>•</span><span>{idade(p.data_nascimento)} anos</span></>}</div></div>
                       </div>
                       <Btn size="sm" variant="ghost" className="text-brand-primary group-hover:bg-brand-primary group-hover:text-white transition-colors">Abrir Prontuário</Btn>
                     </div>
@@ -330,6 +340,18 @@ export function ProntuarioPage() {
               return <button key={tab.id} onClick={() => setActiveTab(tab.id as TabId)} className={`flex items-center gap-2 px-6 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${isActive ? 'border-brand-primary text-brand-primary bg-brand-light/20' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-gray-50'}`}><Icon size={16} />{tab.label}</button>;
             })}
           </div>
+
+          {/* Card de Informações Clínicas Importantes */}
+          {anamnese && (anamnese.alergias || anamnese.doencas_cronicas || anamnese.medicamentos) && (
+            <div className="mx-6 mt-4 p-4 bg-red-50/80 border-l-4 border-l-red-500 border border-y-red-100 border-r-red-100 rounded-r-xl">
+              <h4 className="text-red-700 font-bold text-sm flex items-center gap-2 mb-2"><AlertTriangle size={16} /> Informações Clínicas Importantes</h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                {anamnese.alergias && <div><span className="font-semibold text-red-900 block">Alergias:</span><span className="text-red-800">{anamnese.alergias}</span></div>}
+                {anamnese.doencas_cronicas && <div><span className="font-semibold text-red-900 block">Doenças Crônicas:</span><span className="text-red-800">{anamnese.doencas_cronicas}</span></div>}
+                {anamnese.medicamentos && <div><span className="font-semibold text-red-900 block">Medicamentos em uso:</span><span className="text-red-800">{anamnese.medicamentos}</span></div>}
+              </div>
+            </div>
+          )}
 
           <div className="p-6">
             {activeTab === 'vacinacao' && (
@@ -392,9 +414,9 @@ export function ProntuarioPage() {
                 </div>
                 <h4 className="font-bold text-slate-700 text-sm border-b border-gray-100 pb-2 mt-6">Antropometria e IMC</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <InputField label="Peso (kg)" type="number" step="0.1" placeholder="70" value={tri.peso || ''} onChange={e => setT('peso', e.target.value)} />
-                    <InputField label="Altura (m)" type="number" step="0.01" placeholder="1.75" value={tri.altura || ''} onChange={e => setT('altura', e.target.value)} />
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <InputField label="Peso (kg)" type="number" step="0.1" placeholder="70.5" value={tri.peso || ''} onChange={e => setT('peso', e.target.value)} />
+                    <InputField label="Altura (cm)" type="number" step="1" placeholder="175" value={tri.altura || ''} onChange={e => setT('altura', e.target.value)} />
                     <InputField label="IMC Calculado" value={imc ? imc.toFixed(1) : '—'} disabled />
                   </div>
                   <table className="w-full text-xs border border-gray-200 rounded-xl overflow-hidden h-fit">
@@ -470,35 +492,12 @@ export function ProntuarioPage() {
             )}
 
             {activeTab === 'exames' && (
-              <div className="space-y-6 animate-fade-in-up">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                  <div className="md:col-span-4">
-                    <label className="block text-xs font-semibold text-slate-600 mb-1.5">Procedimento (puxa o valor)</label>
-                    <select value={novoExame.procedimento_id} onChange={e => selecionarProcExame(e.target.value)}
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary">
-                      <option value="">Selecione ou digite manualmente…</option>
-                      {procedimentos.map(p => <option key={p.id} value={p.id}>{p.nome}{p.valor_padrao != null ? ` — R$ ${Number(p.valor_padrao).toFixed(2)}` : ''}</option>)}
-                    </select>
-                  </div>
-                  <div className="md:col-span-3"><InputField label="Exame" placeholder="Ex: Hemograma" value={novoExame.tipo} onChange={e => setNovoExame({ ...novoExame, tipo: e.target.value })} /></div>
-                  <div className="md:col-span-3"><InputField label="Justificativa (CID/motivo)" placeholder="Motivo clínico" value={novoExame.justificativa} onChange={e => setNovoExame({ ...novoExame, justificativa: e.target.value })} /></div>
-                  <div className="md:col-span-1"><InputField label="Valor (R$)" type="number" step="0.01" placeholder="0,00" value={novoExame.valor} onChange={e => setNovoExame({ ...novoExame, valor: e.target.value })} /></div>
-                  <div className="md:col-span-1"><Btn icon={Plus} onClick={addExame} className="w-full justify-center">Add</Btn></div>
+              <div className="space-y-4 animate-fade-in-up">
+                <div className="bg-white rounded-xl overflow-hidden border border-gray-200">
+                  <ReactQuill theme="snow" value={exames} onChange={setExames} modules={QUILL_MODULES}
+                    className="h-72 mb-12" placeholder="Descreva os exames solicitados..." />
                 </div>
-                <div className="border border-gray-100 rounded-xl overflow-hidden">
-                  <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 border-b border-gray-100"><tr><th className="p-3 text-slate-500 font-bold">Exame</th><th className="p-3 text-slate-500 font-bold">Justificativa</th><th className="p-3 text-slate-500 font-bold text-right">Valor</th><th className="p-3"></th></tr></thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {exames.length === 0 ? <tr><td colSpan={4} className="p-8 text-center text-slate-400">Nenhum exame adicionado.</td></tr>
-                        : exames.map((ex, i) => <tr key={i}><td className="p-3 font-medium text-slate-700">{ex.tipo}</td><td className="p-3 text-slate-500">{ex.justificativa || '—'}</td><td className="p-3 text-right font-semibold text-emerald-600">{ex.valor != null ? `R$ ${Number(ex.valor).toFixed(2).replace('.', ',')}` : '—'}</td><td className="p-3 text-right"><button onClick={() => { const arr = exames.filter((_, j) => j !== i); setExames(arr); salvarDoc('exames', arr); }} className="text-slate-400 hover:text-red-500"><Trash2 size={14} /></button></td></tr>)}
-                    </tbody>
-                  </table>
-                </div>
-                {exames.length > 0 && (
-                  <div className="flex justify-end text-sm font-bold text-slate-700">
-                    Total dos exames:&nbsp;<span className="text-emerald-700">R$ {exames.reduce((s, e) => s + (Number(e.valor) || 0), 0).toFixed(2).replace('.', ',')}</span>
-                  </div>
-                )}
+                <div className="flex justify-end"><Btn icon={Save} onClick={() => salvarDoc('exames', exames)}>Salvar Exames</Btn></div>
               </div>
             )}
 

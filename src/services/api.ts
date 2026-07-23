@@ -263,6 +263,9 @@ export interface APIOdontoProc {
   id: string;
   nome_intervencao: string;
   valor_base?: number | null;
+  valor_repasse?: number | null;
+  tipo_repasse?: string | null;
+  local_aplicacao?: string | null;
   especialidade_id?: string | null;
   tipo_visual?: string | null;
   ativo?: boolean;

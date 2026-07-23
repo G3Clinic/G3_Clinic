@@ -6,8 +6,8 @@ import { procedimentosApi, type APIProcedimento } from '../../../services/api';
 const TABS = ['consulta', 'procedimento', 'exame'] as const;
 type TabType = typeof TABS[number];
 
-type Form = { tipo: TabType; nome: string; duracao: string; valor: string };
-const FORM_VAZIO: Form = { tipo: 'consulta', nome: '', duracao: '', valor: '' };
+type Form = { tipo: TabType; nome: string; duracao: string; valor: string; valor_repasse: string; tipo_repasse: string };
+const FORM_VAZIO: Form = { tipo: 'consulta', nome: '', duracao: '', valor: '', valor_repasse: '', tipo_repasse: 'fixo' };
 
 export function AdminAtendimentosPage() {
   const [tab, setTab] = useState<TabType>('consulta');
@@ -39,6 +39,8 @@ export function AdminAtendimentosPage() {
       nome: p.nome,
       duracao: p.duracao != null ? String(p.duracao) : '',
       valor: p.valor_padrao != null ? String(p.valor_padrao) : '',
+      valor_repasse: p.valor_repasse != null ? String(p.valor_repasse) : '',
+      tipo_repasse: p.tipo_repasse || 'fixo',
     });
     setErro(''); setModal(true);
   };
@@ -52,6 +54,8 @@ export function AdminAtendimentosPage() {
         tipo: form.tipo, nome: form.nome.trim(),
         duracao: form.duracao ? Number(form.duracao) : undefined,
         valor_padrao: form.valor ? Number(form.valor) : undefined,
+        valor_repasse: form.valor_repasse ? Number(form.valor_repasse) : undefined,
+        tipo_repasse: form.tipo_repasse,
       };
       if (editandoId) await procedimentosApi.atualizar(editandoId, payload);
       else await procedimentosApi.criar(payload);
@@ -136,6 +140,14 @@ export function AdminAtendimentosPage() {
               value={form.duracao} onChange={e => setCampo('duracao', e.target.value)} />
             <InputField label="Valor (R$)" type="number" step="0.01" placeholder="0.00"
               value={form.valor} onChange={e => setCampo('valor', e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <SelectField label="Tipo de Repasse" required value={form.tipo_repasse} onChange={e => setCampo('tipo_repasse', e.target.value)}>
+              <option value="fixo">Fixo (R$)</option>
+              <option value="percentual">Percentual (%)</option>
+            </SelectField>
+            <InputField label={`Repasse Profissional (${form.tipo_repasse === 'percentual' ? '%' : 'R$'})`} type="number" step="0.01" placeholder="0.00"
+              value={form.valor_repasse} onChange={e => setCampo('valor_repasse', e.target.value)} />
           </div>
           {erro && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{erro}</div>}
         </div>

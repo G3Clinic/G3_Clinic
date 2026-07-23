@@ -148,6 +148,9 @@ class OdontoProcedimento(Base, TenantMixin):
     id = Column(String, primary_key=True, default=_uid)
     nome_intervencao = Column(String, index=True)
     valor_base = Column(Float, default=0)
+    valor_repasse = Column(Float, default=0)
+    tipo_repasse = Column(String, default="fixo") # fixo ou percentual
+    local_aplicacao = Column(String, default="face") # face, dente, arcada
     especialidade_id = Column(String, nullable=True)
     ativo = Column(Boolean, default=True)
     materiais = Column(JSON, nullable=True)

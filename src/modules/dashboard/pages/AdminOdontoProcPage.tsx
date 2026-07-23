@@ -22,6 +22,9 @@ export function AdminOdontoProcPage() {
   const [intvEspId, setIntvEspId] = useState<string>('');
   const [intvNome, setIntvNome] = useState('');
   const [intvValor, setIntvValor] = useState('');
+  const [intvTipoRepasse, setIntvTipoRepasse] = useState('fixo');
+  const [intvValorRepasse, setIntvValorRepasse] = useState('');
+  const [intvLocalAplicacao, setIntvLocalAplicacao] = useState('face');
   const [intvVisual, setIntvVisual] = useState('nenhum');
   const [erroIntv, setErroIntv] = useState('');
 
@@ -70,14 +73,17 @@ export function AdminOdontoProcPage() {
   };
 
   // ── Intervenção ──
-  const abrirNovaIntv = (espId: string) => { setEditIntvId(null); setIntvEspId(espId); setIntvNome(''); setIntvValor(''); setIntvVisual('nenhum'); setErroIntv(''); setModalIntv(true); };
-  const abrirEditIntv = (i: APIOdontoProc) => { setEditIntvId(i.id); setIntvEspId(i.especialidade_id || ''); setIntvNome(i.nome_intervencao); setIntvValor(i.valor_base != null ? String(i.valor_base) : ''); setIntvVisual(i.tipo_visual || 'nenhum'); setErroIntv(''); setModalIntv(true); };
+  const abrirNovaIntv = (espId: string) => { setEditIntvId(null); setIntvEspId(espId); setIntvNome(''); setIntvValor(''); setIntvTipoRepasse('fixo'); setIntvValorRepasse(''); setIntvLocalAplicacao('face'); setIntvVisual('nenhum'); setErroIntv(''); setModalIntv(true); };
+  const abrirEditIntv = (i: APIOdontoProc) => { setEditIntvId(i.id); setIntvEspId(i.especialidade_id || ''); setIntvNome(i.nome_intervencao); setIntvValor(i.valor_base != null ? String(i.valor_base) : ''); setIntvTipoRepasse(i.tipo_repasse || 'fixo'); setIntvValorRepasse(i.valor_repasse != null ? String(i.valor_repasse) : ''); setIntvLocalAplicacao(i.local_aplicacao || 'face'); setIntvVisual(i.tipo_visual || 'nenhum'); setErroIntv(''); setModalIntv(true); };
   const salvarIntv = async () => {
     if (!intvNome.trim()) { setErroIntv('Nome é obrigatório.'); return; }
     try {
       const payload = {
         nome_intervencao: intvNome.trim(),
         valor_base: intvValor ? Number(intvValor) : undefined,
+        valor_repasse: intvValorRepasse ? Number(intvValorRepasse) : undefined,
+        tipo_repasse: intvTipoRepasse,
+        local_aplicacao: intvLocalAplicacao,
         especialidade_id: intvEspId || undefined,
         tipo_visual: intvVisual,
       };
@@ -165,7 +171,21 @@ export function AdminOdontoProcPage() {
       <Modal open={modalIntv} onClose={() => setModalIntv(false)} title={editIntvId ? 'Editar Intervenção' : 'Nova Intervenção/Procedimento'}>
         <div className="space-y-4">
           <InputField label="Nome da Intervenção/Procedimento" required placeholder="Ex: Restauração (Resina)" value={intvNome} onChange={e => setIntvNome(e.target.value)} />
-          <InputField label="Valor Padrão (R$)" type="number" step="0.01" required placeholder="0.00" value={intvValor} onChange={e => setIntvValor(e.target.value)} />
+          <div className="grid grid-cols-2 gap-4">
+            <InputField label="Valor Padrão (R$)" type="number" step="0.01" required placeholder="0.00" value={intvValor} onChange={e => setIntvValor(e.target.value)} />
+            <InputField label={`Repasse Profissional (${intvTipoRepasse === 'percentual' ? '%' : 'R$'})`} type="number" step="0.01" placeholder="0.00" value={intvValorRepasse} onChange={e => setIntvValorRepasse(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <SelectField label="Tipo de Repasse" required value={intvTipoRepasse} onChange={e => setIntvTipoRepasse(e.target.value)}>
+              <option value="fixo">Fixo (R$)</option>
+              <option value="percentual">Percentual (%)</option>
+            </SelectField>
+            <SelectField label="Local de Aplicação" required value={intvLocalAplicacao} onChange={e => setIntvLocalAplicacao(e.target.value)}>
+              <option value="face">Face Específica</option>
+              <option value="dente">Dente Inteiro</option>
+              <option value="arcada">Arcada Completa</option>
+            </SelectField>
+          </div>
           <SelectField label="Tipo Visual no Odontograma" required value={intvVisual} onChange={e => setIntvVisual(e.target.value)}>
             <option value="nenhum">Apenas Lançamento (Ex: Consulta)</option>
             <option value="xis">Marcar com "X"</option>

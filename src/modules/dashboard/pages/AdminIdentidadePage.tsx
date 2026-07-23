@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Palette, Save, Image as ImageIcon, UploadCloud, RefreshCcw } from 'lucide-react';
+import { Palette, Save, Image as ImageIcon, UploadCloud, RefreshCcw, DollarSign } from 'lucide-react';
 import { PageHeader, Card, Btn, InputField } from '../../../components/ui/shared';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { configApi } from '../../../services/api';
@@ -13,6 +13,7 @@ export function AdminIdentidadePage() {
   const [logoFullUrl, setLogoFullUrl] = useState(theme.logoFullUrl);
   const [logoIconUrl, setLogoIconUrl] = useState(theme.logoIconUrl);
   const [companyName, setCompanyName] = useState(theme.companyName);
+  const [taxaCartao, setTaxaCartao] = useState('');
 
   const [isUploading, setIsUploading] = useState(false);
   // Sinaliza quando a URL salva aponta para um arquivo que não carrega.
@@ -33,6 +34,9 @@ export function AdminIdentidadePage() {
       if (t.logoIconUrl) setLogoIconUrl(t.logoIconUrl);
       if (t.companyName) setCompanyName(t.companyName);
       updateTheme(t);
+    }).catch(() => {});
+    configApi.obter('financeiro').then((f: any) => {
+      if (f && f.taxaCartao) setTaxaCartao(String(f.taxaCartao));
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -68,9 +72,10 @@ export function AdminIdentidadePage() {
     updateTheme(tema);
     try {
       await configApi.salvar('tema', tema);
-      alert('Identidade visual atualizada com sucesso!');
+      await configApi.salvar('financeiro', { taxaCartao: taxaCartao ? Number(taxaCartao) : 0 });
+      alert('Configurações atualizadas com sucesso!');
     } catch (e) {
-      console.error('Falha ao salvar tema no servidor:', e);
+      console.error('Falha ao salvar no servidor:', e);
       alert('Aplicado nesta sessão, mas não foi possível salvar no servidor. Tente novamente.');
     }
   };
@@ -186,6 +191,27 @@ export function AdminIdentidadePage() {
               <input type="text" value={topbarColor} onChange={(e) => setTopbarColor(e.target.value)} className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary uppercase" />
             </div>
           </div>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-gray-100 pb-3">
+          <DollarSign size={18} className="text-brand-primary" />
+          Financeiro
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <InputField 
+            label="Taxa de Cartão Padrão (%)" 
+            type="number" 
+            step="0.01"
+            value={taxaCartao} 
+            onChange={(e: any) => setTaxaCartao(e.target.value)} 
+            placeholder="Ex: 5.0" 
+          />
+        </div>
+        <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+          <p className="text-xs text-blue-700"><strong>Dica:</strong> A taxa informada aqui será descontada automaticamente do valor base antes do cálculo do repasse dos profissionais nas transações feitas via cartão de crédito.</p>
         </div>
       </Card>
 

@@ -64,6 +64,7 @@ type AnamneseForm = {
   doencas_cronicas: string;
   medicamentos: string;
   cirurgias: string;
+  anamnese_odontologica: string;
   fumante: string;      // 'sim' | 'nao' | ''
   alcool: string;
   gravidez: string;
@@ -72,7 +73,7 @@ type AnamneseForm = {
   observacoes: string;
 };
 const ANAMNESE_VAZIA: AnamneseForm = {
-  alergias: '', doencas_cronicas: '', medicamentos: '', cirurgias: '',
+  alergias: '', doencas_cronicas: '', medicamentos: '', cirurgias: '', anamnese_odontologica: '',
   fumante: '', alcool: '', gravidez: '', pressao_alterada: '', diabetes: '', observacoes: '',
 };
 
@@ -434,9 +435,17 @@ export function PacientesPage() {
   const abrirPrescricaoMemed = () => {
     const p = perfilAtivo;
     if (!p) return;
+    if (!p.cpf) {
+      alert('É necessário informar o CPF do paciente para emitir a prescrição digital.');
+      return;
+    }
+    if (!p.raw.endereco || !p.raw.bairro || !p.raw.cidade || !p.raw.uf) {
+      alert('É necessário informar o endereço completo (Rua, Bairro, Cidade e UF) do paciente para emitir a prescrição digital.');
+      return;
+    }
     abrirPrescricao(
       { id: p.id, nome: p.nome, sexo: p.sexo, cpf: p.cpf, data_nascimento: p.data_nascimento, telefone: p.raw.telefone, email: p.raw.email },
-      { nome: p.plano || 'Clínica' },
+      { nome: p.plano || 'Clínica', uf: p.raw.uf || undefined, cidade: p.raw.cidade || undefined },
     );
   };
 
@@ -734,19 +743,24 @@ export function PacientesPage() {
           {/* Histórico de CIDs */}
           <Card padding={true} className="border-none shadow-sm">
             <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Activity size={16} className="text-brand-primary" /> Histórico de CIDs
+              <Activity size={16} className="text-brand-primary" /> Histórico de CIDs (Doenças)
             </h3>
-            {perfilAtivo.historico_cid && perfilAtivo.historico_cid.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {perfilAtivo.historico_cid.map((cid, i) => (
-                  <span key={i} className="px-2 py-1 bg-red-50 text-red-700 text-xs font-bold rounded border border-red-100">
-                    {cid}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-500 italic">Nenhum CID registrado.</p>
-            )}
+            {(() => {
+              const cidsUnicos = new Map<string, string>();
+              consultas.forEach(c => {
+                if (c.cid) cidsUnicos.set(c.cid, c.cid_descricao || '');
+              });
+              if (cidsUnicos.size > 0) {
+                return (
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from(cidsUnicos.entries()).map(([codigo, desc]) => (
+                      <Badge key={codigo} color="red">{codigo}{desc ? ` - ${desc}` : ''}</Badge>
+                    ))}
+                  </div>
+                );
+              }
+              return <p className="text-xs text-slate-500 italic">Nenhum CID registrado.</p>;
+            })()}
           </Card>
 
           <Card title="Dados Demográficos">
@@ -1069,6 +1083,16 @@ export function PacientesPage() {
                     <InputField label="Doenças Crônicas" placeholder="Ex: Hipertensão, asma..." value={anamnese.doencas_cronicas} onChange={e => setAnam('doencas_cronicas', e.target.value)} />
                     <InputField label="Medicamentos em uso" placeholder="Uso contínuo..." value={anamnese.medicamentos} onChange={e => setAnam('medicamentos', e.target.value)} />
                     <InputField label="Cirurgias anteriores" placeholder="Histórico cirúrgico..." value={anamnese.cirurgias} onChange={e => setAnam('cirurgias', e.target.value)} />
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <label className="block text-xs font-bold text-slate-600 mb-2">Anamnese Odontológica</label>
+                    <textarea 
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary min-h-[80px]"
+                      placeholder="Histórico odontológico, próteses, tratamentos..."
+                      value={anamnese.anamnese_odontologica}
+                      onChange={e => setAnam('anamnese_odontologica', e.target.value)}
+                    ></textarea>
                   </div>
 
                   <div>

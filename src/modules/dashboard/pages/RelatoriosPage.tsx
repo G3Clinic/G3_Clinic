@@ -3,7 +3,7 @@ import { BarChart, Users, FileText, Calendar, DollarSign, Activity, RefreshCcw, 
 import { PageHeader, Card, Btn, StatsCard, SelectField, InputField } from '../../../components/ui/shared';
 import {
   agendamentosApi, recebimentosApi, conveniosApi, procedimentosApi, usuariosApi,
-  pacientesApi, custosApi, recepcaoLabApi,
+  pacientesApi, custosApi, recepcaoLabApi, configApi,
   type APIAgendamento, type APIRecebimento, type APIConvenio, type APIProcedimento, type APIUsuario,
   type APIPaciente, type APICusto, type APIRecepcaoLab,
 } from '../../../services/api';
@@ -36,6 +36,7 @@ export function RelatoriosPage() {
   const [pacientes, setPacientes] = useState<APIPaciente[]>([]);
   const [custos, setCustos] = useState<APICusto[]>([]);
   const [trabalhosLab, setTrabalhosLab] = useState<APIRecepcaoLab[]>([]);
+  const [taxaCartao, setTaxaCartao] = useState(0);
 
   const carregar = useCallback(() => {
     agendamentosApi.listar().then(setAgs).catch(() => {});
@@ -46,6 +47,7 @@ export function RelatoriosPage() {
     pacientesApi.listar().then(setPacientes).catch(() => {});
     custosApi.listar().then(setCustos).catch(() => {});
     recepcaoLabApi.listar().then(setTrabalhosLab).catch(() => {});
+    configApi.obter('financeiro').then((f: any) => { if (f && f.taxaCartao) setTaxaCartao(Number(f.taxaCartao)); }).catch(() => {});
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -98,8 +100,20 @@ export function RelatoriosPage() {
   const totalCustos = custos.reduce((s, c) => s + (c.valor || 0), 0);
   const repasseDe = (a: APIAgendamento) => {
     const proc = procedimentos.find(p => p.id === a.procedimento_id);
-    const perc = proc?.valor_repasse || 0;
-    return (a.valor_cobrado || 0) * (perc / 100);
+    const tipoRep = proc?.tipo_repasse || 'fixo';
+    const valRep = proc?.valor_repasse || 0;
+    
+    // Calcula base deduzindo taxa de cartão se pago no cartão
+    let base = a.valor_cobrado || 0;
+    if (a.forma_pagamento?.toLowerCase().includes('cartão')) {
+      base = base * (1 - taxaCartao / 100);
+    }
+
+    if (tipoRep === 'percentual') {
+      return base * (valRep / 100);
+    } else {
+      return valRep;
+    }
   };
   const finalizadosF = agsF.filter(a => a.status === 'Finalizado');
   const totalRepasses = finalizadosF.reduce((s, a) => s + repasseDe(a), 0);

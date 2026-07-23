@@ -202,22 +202,51 @@ export function OdontogramaPage() {
 
   const abrirModalIntervencao = (proc: APIOdontoProc) => {
     if (!paciente) { alert('Selecione um paciente primeiro.'); return; }
-    if (!denteSel) { alert('Selecione um dente primeiro.'); return; }
-    setIntAtual(proc); setFacesSel([]); setStatusSel('a_realizar');
+    if (!denteSel && proc.local_aplicacao !== 'arcada' && proc.local_aplicacao !== 'geral') { alert('Selecione um dente primeiro.'); return; }
+    setIntAtual(proc);
+    if (proc.local_aplicacao === 'dente' && denteSel) {
+      setFacesSel(facesDoDente(denteSel).map(f => f.c));
+    } else {
+      setFacesSel([]);
+    }
+    setStatusSel('a_realizar');
     setValorPaciente(String(proc.valor_base ?? 0)); setModalIntOpen(true);
   };
   const toggleFaceModal = (face: string) => setFacesSel(prev => prev.includes(face) ? prev.filter(f => f !== face) : [...prev, face]);
 
   const gravarIntervencao = () => {
-    if (!intAtual || !denteSel) return;
-    if (!facesSel.length) { alert('Selecione pelo menos uma face.'); return; }
-    const faces = facesDoDente(denteSel);
+    if (!intAtual) return;
+    if (!denteSel && intAtual.local_aplicacao !== 'arcada' && intAtual.local_aplicacao !== 'geral') return;
+    if (intAtual.local_aplicacao === 'face' && !facesSel.length) { alert('Selecione pelo menos uma face.'); return; }
+    const faces = denteSel ? facesDoDente(denteSel) : [];
     const labels = facesSel.map(c => faces.find(f => f.c === c)?.l || c).join(', ');
     setItens(prev => [...prev, {
       id: Math.random().toString(36).slice(2), dente: denteSel, faces: facesSel, facesLabels: labels,
       proc: intAtual.nome_intervencao, valor: Number(valorPaciente) || Number(intAtual.valor_base) || 0,
       procedimentoId: intAtual.id, tipoVisual: intAtual.tipo_visual || 'nenhum', statusVisual: statusSel,
     }]);
+    setModalIntOpen(false); setIntAtual(null); setFacesSel([]);
+  };
+
+  const aplicarTodaArcada = () => {
+    if (!intAtual) return;
+    const todos = [...PERM_SUP, ...PERM_INF, ...DEC_SUP, ...DEC_INF];
+    const valorBase = Number(valorPaciente) || Number(intAtual.valor_base) || 0;
+    const newItens = todos.map((d, idx) => {
+      const faces = facesDoDente(d);
+      return {
+        id: Math.random().toString(36).slice(2) + idx, 
+        dente: d, 
+        faces: faces.map(f => f.c), 
+        facesLabels: 'Arcada Completa',
+        proc: intAtual.nome_intervencao, 
+        valor: idx === 0 ? valorBase : 0, 
+        procedimentoId: intAtual.id, 
+        tipoVisual: intAtual.tipo_visual || 'nenhum', 
+        statusVisual: statusSel,
+      };
+    });
+    setItens(prev => [...prev, ...newItens]);
     setModalIntOpen(false); setIntAtual(null); setFacesSel([]);
   };
   const removerItem = (id: string) => setItens(prev => prev.filter(i => i.id !== id));
@@ -502,7 +531,8 @@ export function OdontogramaPage() {
                   })}
                 </div>
               </div>
-              <p className="text-xs text-slate-500 mt-2">{facesSel.length ? facesSel.map(c => facesDoDente(denteSel!).find(f => f.c === c)?.l).join(' · ') : 'Nenhuma face selecionada'}</p>
+              </div>
+              <p className="text-xs text-slate-500 mt-2">{denteSel && facesSel.length ? facesSel.map(c => facesDoDente(denteSel).find(f => f.c === c)?.l).join(' · ') : 'Nenhuma face selecionada'}</p>
             </div>
 
             <div>
@@ -524,6 +554,9 @@ export function OdontogramaPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              {intAtual.local_aplicacao === 'arcada' && (
+                <Btn variant="secondary" onClick={aplicarTodaArcada}>Aplicar em Toda a Arcada</Btn>
+              )}
               <Btn variant="ghost" onClick={() => setModalIntOpen(false)}>Cancelar</Btn>
               <Btn icon={CheckCircle} onClick={gravarIntervencao}>Gravar intervenção</Btn>
             </div>
