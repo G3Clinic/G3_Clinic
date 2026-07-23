@@ -531,7 +531,6 @@ export function OdontogramaPage() {
                   })}
                 </div>
               </div>
-              </div>
               <p className="text-xs text-slate-500 mt-2">{denteSel && facesSel.length ? facesSel.map(c => facesDoDente(denteSel).find(f => f.c === c)?.l).join(' · ') : 'Nenhuma face selecionada'}</p>
             </div>
 
