@@ -211,7 +211,7 @@ export function AdminIdentidadePage() {
           />
         </div>
         <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl">
-          <p className="text-xs text-blue-700"><strong>Dica:</strong> A taxa informada aqui será descontada automaticamente do valor base antes do cálculo do repasse dos profissionais nas transações feitas via cartão de crédito.</p>
+          <p className="text-xs text-blue-700"><strong>Dica:</strong> A taxa informada aqui será descontada automaticamente do valor base antes do cálculo do repasse dos profissionais nas transações feitas via cartão (crédito ou débito).</p>
         </div>
       </Card>
 

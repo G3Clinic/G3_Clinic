@@ -3,23 +3,44 @@ import { ClipboardList, Search, User, FileText, Activity, Stethoscope, FileSymli
 import { PageHeader, Card, Btn, Badge, InputField, Modal } from '../../../components/ui/shared';
 import {
   pacientesApi, atendimentosClinicosApi, evolucoesApi, documentosApi, modelosProntuarioApi,
-  procedimentosApi, memedApi, vacinasApi, configApi,
+  procedimentosApi, memedApi, vacinasApi, configApi, pacienteStore,
   type APIPaciente, type APIEvolucao, type APIModeloProntuario, type APIProcedimento, type APIVacina,
 } from '../../../services/api';
-import ReactQuill from 'react-quill-new';
+import ReactQuill, { Quill } from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { useMemed } from '../../../hooks/useMemed';
 
+// Linha divisória (<hr>) no editor — blot custom registrado uma única vez no módulo
+const BlockEmbed: any = Quill.import('blots/block/embed');
+class DividerBlot extends BlockEmbed {
+  static blotName = 'divider';
+  static tagName = 'hr';
+}
+Quill.register(DividerBlot, true);
+const quillIcons: any = Quill.import('ui/icons');
+quillIcons['divider'] = '<svg viewBox="0 0 18 18"><line class="ql-stroke" x1="2" y1="9" x2="16" y2="9"></line></svg>';
+
 // Barra de ferramentas rica para a evolução clínica
 const QUILL_MODULES = {
-  toolbar: [
-    [{ header: [1, 2, 3, false] }],
-    ['bold', 'italic', 'underline', 'strike'],
-    [{ list: 'ordered' }, { list: 'bullet' }],
-    [{ align: [] }],
-    [{ color: [] }, { background: [] }],
-    ['clean'],
-  ],
+  toolbar: {
+    container: [
+      [{ header: [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ list: 'ordered' }, { list: 'bullet' }],
+      [{ align: [] }],
+      [{ color: [] }, { background: [] }],
+      ['divider', 'clean'],
+    ],
+    handlers: {
+      divider(this: { quill: any }) {
+        const q = this.quill;
+        const range = q.getSelection(true);
+        q.insertText(range.index, '\n', 'user');
+        q.insertEmbed(range.index + 1, 'divider', true, 'user');
+        q.setSelection(range.index + 2, 0, 'silent');
+      },
+    },
+  },
 };
 
 type TabId = 'vacinacao' | 'triagem' | 'evolucao' | 'exames' | 'receituario' | 'atestado';
@@ -230,6 +251,17 @@ export function ProntuarioPage() {
     setAtendimentoId(atd.id);
     await carregarAtendimento(atd.id);
   };
+
+  // Paciente "levado" de outra tela (ex.: Recepção → Ficha do Paciente) — one-shot
+  useEffect(() => {
+    if (paciente || pacientes.length === 0) return;
+    const alvo = pacienteStore.get();
+    if (!alvo) return;
+    pacienteStore.clear();
+    const p = pacientes.find(x => Number(x.id) === Number(alvo.id));
+    if (p) abrirProntuario(p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pacientes]);
 
   // upsert de documento por tipo
   const salvarDoc = async (tipo: string, conteudo: any) => {
