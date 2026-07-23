@@ -439,7 +439,7 @@ export function PacientesPage() {
       alert('É necessário informar o CPF do paciente para emitir a prescrição digital.');
       return;
     }
-    if (!p.raw.endereco || !p.raw.bairro || !p.raw.cidade || !p.raw.uf) {
+    if (!p.raw.logradouro || !p.raw.bairro || !p.raw.cidade || !p.raw.uf) {
       alert('É necessário informar o endereço completo (Rua, Bairro, Cidade e UF) do paciente para emitir a prescrição digital.');
       return;
     }

@@ -34,7 +34,7 @@ const facesDoDente = (num: number) =>
     : [{ c: 'V', l: 'Vestibular' }, { c: 'L', l: 'Lingual/Palatina' }, { c: 'M', l: 'Mesial' }, { c: 'D', l: 'Distal' }, { c: 'O', l: 'Oclusal' }];
 
 type CartItem = {
-  id: string; dente: number; faces: string[]; facesLabels: string;
+  id: string; dente: number | null; faces: string[]; facesLabels: string;
   proc: string; valor: number; procedimentoId: string; tipoVisual: string; statusVisual: string;
 };
 // estado dental: por dente, lista de marcações {faces(codes), cor, tipoVisual}

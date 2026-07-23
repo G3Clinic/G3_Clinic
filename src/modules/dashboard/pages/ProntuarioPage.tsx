@@ -177,7 +177,7 @@ export function ProntuarioPage() {
       alert('É necessário informar o CPF do paciente para emitir a prescrição digital.');
       return;
     }
-    if (!paciente.endereco || !paciente.bairro || !paciente.cidade || !paciente.uf) {
+    if (!paciente.logradouro || !paciente.bairro || !paciente.cidade || !paciente.uf) {
       alert('É necessário informar o endereço completo (Rua, Bairro, Cidade e UF) do paciente para emitir a prescrição digital.');
       return;
     }
@@ -321,7 +321,7 @@ export function ProntuarioPage() {
                     <div key={p.id} onClick={() => abrirProntuario(p)} className="flex items-center justify-between p-3 border border-gray-100 rounded-xl hover:border-brand-primary hover:bg-brand-light/10 cursor-pointer transition-all bg-white group">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-brand-light text-brand-primary rounded-full flex items-center justify-center font-bold text-sm">{p.nome.substring(0, 2).toUpperCase()}</div>
-                        <div><p className="font-bold text-slate-800 group-hover:text-brand-primary transition-colors">{p.nome}</p><div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5"><span>CPF: {p.cpf}</span>{idade(paciente?.data_nascimento) != null && <><span>•</span><span>{idade(p.data_nascimento)} anos</span></>}</div></div>
+                        <div><p className="font-bold text-slate-800 group-hover:text-brand-primary transition-colors">{p.nome}</p><div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5"><span>CPF: {p.cpf}</span>{idade(p.data_nascimento) != null && <><span>•</span><span>{idade(p.data_nascimento)} anos</span></>}</div></div>
                       </div>
                       <Btn size="sm" variant="ghost" className="text-brand-primary group-hover:bg-brand-primary group-hover:text-white transition-colors">Abrir Prontuário</Btn>
                     </div>
