@@ -166,12 +166,14 @@ export function OdontogramaPage() {
     const mapa: Record<number, Marca[]> = {};
     itens.forEach(it => {
       const tv = it.tipoVisual || 'nenhum';
-      mapa[it.dente] = mapa[it.dente] || [];
-      mapa[it.dente].push({ 
-        faces: it.faces.join(','), 
-        cor: COR_STATUS[it.statusVisual] || COR_STATUS.a_realizar,
-        tipoVisual: tv === 'nenhum' ? 'tratado' : tv
-      });
+      if (it.dente !== null) {
+        mapa[it.dente] = mapa[it.dente] || [];
+        mapa[it.dente].push({ 
+          faces: it.faces.join(','), 
+          cor: COR_STATUS[it.statusVisual] || COR_STATUS.a_realizar,
+          tipoVisual: tv === 'nenhum' ? 'tratado' : tv
+        });
+      }
     });
     return mapa;
   }, [itens]);
