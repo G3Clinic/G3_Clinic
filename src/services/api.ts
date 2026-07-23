@@ -56,6 +56,10 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (res.status === 401) {
+    if (path.includes('/auth/login')) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || 'E-mail ou senha incorretos');
+    }
     // Token ausente/expirado: limpa e manda para o login.
     tokenStore.clear();
     if (!location.pathname.startsWith('/login')) location.href = '/login';
