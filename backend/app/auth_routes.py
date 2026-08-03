@@ -74,6 +74,10 @@ class PermissoesIn(BaseModel):
     modulos: List[str]
 
 
+class FiliaisIn(BaseModel):
+    unidade_ids: List[int]
+
+
 class SenhaIn(BaseModel):
     senha: str
 
@@ -346,6 +350,47 @@ def vincular_filial(
             empresa_id=empresa_id, usuario_id=usuario_id, unidade_id=unidade_id
         ))
         db.commit()
+    return {"ok": True}
+
+
+@router.get("/admin/usuarios/{usuario_id}/filiais")
+def listar_filiais_usuario(
+    usuario_id: str,
+    user: cm.PerfilUsuario = Depends(get_current_user),
+    empresa_id: int = Depends(get_empresa_id),
+    db: Session = Depends(get_db),
+):
+    _exige_admin(user)
+    alvo = db.get(cm.PerfilUsuario, usuario_id)
+    if not alvo or alvo.empresa_id != empresa_id:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado na empresa")
+
+    filiais = db.query(tm.UsuarioFilial).filter_by(usuario_id=usuario_id).all()
+    return [f.unidade_id for f in filiais]
+
+
+@router.put("/admin/usuarios/{usuario_id}/filiais")
+def definir_filiais_usuario(
+    usuario_id: str,
+    dados: FiliaisIn,
+    user: cm.PerfilUsuario = Depends(get_current_user),
+    empresa_id: int = Depends(get_empresa_id),
+    db: Session = Depends(get_db),
+):
+    _exige_admin(user)
+    alvo = db.get(cm.PerfilUsuario, usuario_id)
+    if not alvo or alvo.empresa_id != empresa_id:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado na empresa")
+
+    # Apaga as atuais
+    db.query(tm.UsuarioFilial).filter_by(usuario_id=usuario_id).delete()
+    
+    # Insere as novas
+    for uid in dados.unidade_ids:
+        db.add(tm.UsuarioFilial(
+            empresa_id=empresa_id, usuario_id=usuario_id, unidade_id=uid
+        ))
+    db.commit()
     return {"ok": True}
 
 

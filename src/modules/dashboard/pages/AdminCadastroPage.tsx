@@ -24,6 +24,13 @@ const MODULOS: { label: string; key: string | null }[] = [
   { label: 'Administração', key: 'admin' },
 ];
 
+const MODULOS_POR_PAPEL: Record<string, string[]> = {
+  '1': ['pacientes', 'agenda', 'recepcao', 'prontuario', 'odontograma', 'caixa', 'financeiro', 'estoque', 'relatorios', 'admin'],
+  '2': ['agenda', 'prontuario', 'odontograma'],
+  '3': ['pacientes', 'agenda', 'recepcao', 'caixa'],
+  '4': ['financeiro', 'relatorios', 'caixa']
+};
+
 type Form = {
   nome: string; email: string; cpf: string; telefone: string; papel: string; senha: string;
   conselho_tipo: string; conselho_numero: string; conselho_uf: string;
@@ -49,12 +56,20 @@ export function AdminCadastroPage() {
 
   const [form, setForm] = useState<Form>(FORM_VAZIO);
   const [modsMarcados, setModsMarcados] = useState<Set<string>>(new Set());
+  const [filiaisMarcadas, setFiliaisMarcadas] = useState<Set<number>>(new Set());
   const [senha1, setSenha1] = useState('');
   const [senha2, setSenha2] = useState('');
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
 
   const setCampo = (c: keyof Form, v: string) => setForm(prev => ({ ...prev, [c]: v }));
+
+  const handlePapelChange = (papel: string) => {
+    setCampo('papel', papel);
+    if (MODULOS_POR_PAPEL[papel]) {
+      setModsMarcados(new Set(MODULOS_POR_PAPEL[papel]));
+    }
+  };
 
   const carregar = useCallback(() => {
     setLoading(true);
@@ -71,7 +86,13 @@ export function AdminCadastroPage() {
   });
 
   // ── Novo usuário ──
-  const abrirNovo = () => { setForm(FORM_VAZIO); setErro(''); setModal(true); };
+  const abrirNovo = () => { 
+    setForm(FORM_VAZIO); 
+    setErro(''); 
+    setModsMarcados(new Set()); 
+    setFiliaisMarcadas(new Set(filiais.map(f => f.id)));
+    setModal(true); 
+  };
   const salvarNovo = async () => {
     setErro('');
     if (!form.nome.trim() || !form.email.trim() || !form.papel) { setErro('Nome, e-mail e perfil são obrigatórios.'); return; }
@@ -81,10 +102,15 @@ export function AdminCadastroPage() {
       const payload: Record<string, unknown> = {
         nome: form.nome.trim(), email: form.email.trim(), senha: form.senha,
         role: ROLE_POR_NUM[form.papel], cpf: form.cpf || undefined, telefone: form.telefone || undefined,
-        unidade_ids: filiais.map(f => f.id),
+        unidade_ids: Array.from(filiaisMarcadas),
       };
       if (form.papel === '2') Object.assign(payload, camposProfissional());
-      await usuariosApi.criar(payload);
+      const res = await usuariosApi.criar(payload);
+      
+      const modulos = Array.from(modsMarcados);
+      const filiaisArr = Array.from(filiaisMarcadas);
+      await Promise.all(filiaisArr.map(id => usuariosApi.definirPermissoes(res.id, id, modulos)));
+
       setModal(false); carregar();
     } catch (e) { setErro(e instanceof Error ? e.message : 'Erro ao criar usuário.'); }
     finally { setSalvando(false); }
@@ -106,10 +132,19 @@ export function AdminCadastroPage() {
       const doUser = todas.filter(p => p.usuario_id === u.id).map(p => p.modulo);
       setModsMarcados(new Set(doUser));
     } catch { setModsMarcados(new Set()); }
+    
+    try {
+      const uFiliais = await usuariosApi.listarFiliaisUsuario(u.id);
+      setFiliaisMarcadas(new Set(uFiliais));
+    } catch { setFiliaisMarcadas(new Set()); }
+    
     setEditModalOpen(true);
   };
   const toggleMod = (key: string) => setModsMarcados(prev => {
     const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n;
+  });
+  const toggleFilial = (id: number) => setFiliaisMarcadas(prev => {
+    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
   });
   const salvarEdit = async () => {
     if (!selectedUser) return;
@@ -120,9 +155,11 @@ export function AdminCadastroPage() {
         telefone: form.telefone || undefined, role: ROLE_POR_NUM[form.papel],
         ...(form.papel === '2' ? camposProfissional() : {}),
       });
-      // aplica módulos em todas as filiais da empresa
+      // aplica módulos apenas nas filiais marcadas
+      const filiaisArr = Array.from(filiaisMarcadas);
+      await usuariosApi.definirFiliaisUsuario(selectedUser.id, filiaisArr);
       const modulos = Array.from(modsMarcados);
-      await Promise.all(filiais.map(f => usuariosApi.definirPermissoes(selectedUser.id, f.id, modulos)));
+      await Promise.all(filiaisArr.map(id => usuariosApi.definirPermissoes(selectedUser.id, id, modulos)));
       setEditModalOpen(false); carregar();
     } catch (e) { setErro(e instanceof Error ? e.message : 'Erro ao salvar.'); }
     finally { setSalvando(false); }
@@ -145,6 +182,46 @@ export function AdminCadastroPage() {
   };
 
   const iniciais = (nome: string) => nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+
+  const renderPermissoes = () => (
+    <>
+      <div className="mt-4">
+        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">UNIDADES LIBERADAS</label>
+        <div className="grid grid-cols-2 gap-2">
+          {filiais.map(f => {
+            const marcado = filiaisMarcadas.has(f.id);
+            return (
+              <label key={f.id} className={`flex items-center gap-2 p-2 bg-slate-50 rounded-lg border cursor-pointer transition-colors ${marcado ? 'border-brand-primary/40' : 'border-transparent hover:border-brand-primary/20'}`}>
+                <input type="checkbox" className="hidden" checked={marcado} onChange={() => toggleFilial(f.id)} />
+                <div className={`w-4 h-4 rounded border flex items-center justify-center ${marcado ? 'bg-brand-primary border-brand-primary' : 'bg-white border-slate-300'}`}>
+                  {marcado && <Check size={12} className="text-white" />}
+                </div>
+                <span className="text-sm font-bold text-slate-700">{f.nome}</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+      <div className="mt-4">
+        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">MÓDULOS LIBERADOS</label>
+        <div className="grid grid-cols-2 gap-2">
+          {MODULOS.map(m => {
+            const marcado = m.key === null || modsMarcados.has(m.key);
+            return (
+              <label key={m.label} className={`flex items-center gap-2 p-2 bg-slate-50 rounded-lg border cursor-pointer transition-colors ${marcado ? 'border-brand-primary/40' : 'border-transparent hover:border-brand-primary/20'} ${m.key === null ? 'opacity-60 cursor-default' : ''}`}>
+                <input type="checkbox" className="hidden" disabled={m.key === null} checked={marcado} onChange={() => m.key && toggleMod(m.key)} />
+                <div className={`w-4 h-4 rounded border flex items-center justify-center ${marcado ? 'bg-brand-primary border-brand-primary' : 'bg-white border-slate-300'}`}>
+                  {marcado && <Check size={12} className="text-white" />}
+                </div>
+                <span className="text-sm font-bold text-slate-700">{m.label}</span>
+              </label>
+            );
+          })}
+        </div>
+        <p className="text-[10px] text-slate-500 mt-2">Administrador e dono têm acesso total automaticamente. "Painel" e "Auditoria" são sempre visíveis.</p>
+      </div>
+    </>
+  );
 
   return (
     <div className="space-y-5">
@@ -201,7 +278,7 @@ export function AdminCadastroPage() {
             <InputField label="CPF" placeholder="000.000.000-00" value={form.cpf} onChange={e => setCampo('cpf', e.target.value)} />
             <InputField label="Celular" placeholder="(00) 00000-0000" value={form.telefone} onChange={e => setCampo('telefone', e.target.value)} />
           </div>
-          <SelectField label="Perfil de Acesso" required value={form.papel} onChange={e => setCampo('papel', e.target.value)}>
+          <SelectField label="Perfil de Acesso" required value={form.papel} onChange={e => handlePapelChange(e.target.value)}>
             <option value="">Selecione</option>
             <option value="1">Administrador</option>
             <option value="2">Profissional de Saúde</option>
@@ -232,6 +309,8 @@ export function AdminCadastroPage() {
             </div>
           )}
 
+          {renderPermissoes()}
+
           <InputField label="Senha Temporária" type="password" required value={form.senha} onChange={e => setCampo('senha', e.target.value)} />
           {erro && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{erro}</div>}
         </div>
@@ -250,7 +329,7 @@ export function AdminCadastroPage() {
             <InputField label="CELULAR" value={form.telefone} onChange={e => setCampo('telefone', e.target.value)} />
           </div>
           <InputField label="E-MAIL (OPCIONAL)" value={form.email} onChange={e => setCampo('email', e.target.value)} />
-          <SelectField label="PAPEL *" value={form.papel} onChange={e => setCampo('papel', e.target.value)}>
+          <SelectField label="PAPEL *" value={form.papel} onChange={e => handlePapelChange(e.target.value)}>
             <option value="1">Administrador</option>
             <option value="2">Profissional de Saúde</option>
             <option value="3">Recepcionista</option>
@@ -278,24 +357,7 @@ export function AdminCadastroPage() {
             </div>
           )}
 
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">MÓDULOS LIBERADOS</label>
-            <div className="grid grid-cols-2 gap-2">
-              {MODULOS.map(m => {
-                const marcado = m.key === null || modsMarcados.has(m.key);
-                return (
-                  <label key={m.label} className={`flex items-center gap-2 p-2 bg-slate-50 rounded-lg border cursor-pointer transition-colors ${marcado ? 'border-brand-primary/40' : 'border-transparent hover:border-brand-primary/20'} ${m.key === null ? 'opacity-60 cursor-default' : ''}`}>
-                    <input type="checkbox" className="hidden" disabled={m.key === null} checked={marcado} onChange={() => m.key && toggleMod(m.key)} />
-                    <div className={`w-4 h-4 rounded border flex items-center justify-center ${marcado ? 'bg-brand-primary border-brand-primary' : 'bg-white border-slate-300'}`}>
-                      {marcado && <Check size={12} className="text-white" />}
-                    </div>
-                    <span className="text-sm font-bold text-slate-700">{m.label}</span>
-                  </label>
-                );
-              })}
-            </div>
-            <p className="text-[10px] text-slate-500 mt-2">Administrador e dono têm acesso total automaticamente. "Painel" e "Auditoria" são sempre visíveis.</p>
-          </div>
+          {renderPermissoes()}
           {erro && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{erro}</div>}
         </div>
         <div className="mt-8 flex justify-end">

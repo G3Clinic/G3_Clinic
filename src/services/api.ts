@@ -323,6 +323,12 @@ export const usuariosApi = {
     apiFetch<{ ok: boolean }>(`/admin/usuarios/${id}/permissoes`, {
       method: 'POST', body: JSON.stringify({ unidade_id, modulos }),
     }),
+  listarFiliaisUsuario: (id: string) =>
+    apiFetch<number[]>(`/admin/usuarios/${id}/filiais`),
+  definirFiliaisUsuario: (id: string, unidade_ids: number[]) =>
+    apiFetch<{ ok: boolean }>(`/admin/usuarios/${id}/filiais`, {
+      method: 'PUT', body: JSON.stringify({ unidade_ids }),
+    }),
 };
 export const modulosApi = { listar: () => apiFetch<APIModulo[]>('/admin/modulos') };
 export const permissoesApi = crudApi<APIPermissao>('usuario_permissoes');
