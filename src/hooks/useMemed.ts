@@ -125,7 +125,10 @@ export function useMemed() {
     };
     if (paciente.cpf) p.cpf = String(paciente.cpf).replace(/\D/g, '');
     const nasc = nascMemed(paciente.data_nascimento); if (nasc) p.data_nascimento = nasc;
-    if (paciente.telefone) p.telefone = paciente.telefone;
+    if (paciente.telefone) {
+      const telNumbers = String(paciente.telefone).replace(/\D/g, '');
+      if (telNumbers.length >= 10) p.telefone = telNumbers.slice(-11);
+    }
     if (paciente.email) p.email = paciente.email;
 
     // Aguarda o comando, mas com teto de tempo — se a Memed demorar/pendurar,
