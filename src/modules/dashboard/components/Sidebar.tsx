@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useAuth } from '../../../contexts/AuthContext';
+import { filialStore } from '../../../services/api';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -106,7 +108,16 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     return saved === 'true';
   });
   const { theme } = useTheme();
+  const { user } = useAuth();
   const navigate = useNavigate();
+
+  const unidadeAtiva = filialStore.get();
+  const temPermissao = (modKey: string) => {
+    if (user?.is_dono || user?.role === 'administrador') return true;
+    if (!unidadeAtiva) return false;
+    const perms = user?.permissoes || [];
+    return perms.some(p => String(p.unidade_id) === unidadeAtiva && p.modulo === modKey);
+  };
 
   // Se a logo salva apontar para um arquivo inexistente/quebrado, caímos no
   // branding padrão em vez de mostrar o ícone de imagem quebrada.
@@ -175,51 +186,59 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             {isCollapsed ? "•" : "Principal"}
           </div>
           <NavItem icon={Home} label="Tela Inicial" to="/dashboard" isCollapsed={isCollapsed} />
-          <NavItem icon={Users} label="Pacientes" to="/dashboard/pacientes" isCollapsed={isCollapsed} />
-          <NavItem icon={Calendar} label="Agenda" to="/dashboard/agenda" isCollapsed={isCollapsed} />
-          <NavItem icon={MonitorPlay} label="Recepção" to="/dashboard/recepcao" isCollapsed={isCollapsed} />
-          <NavItem icon={ClipboardList} label="Prontuário Eletrônico" to="/dashboard/prontuario" isCollapsed={isCollapsed} />
-          <NavItem icon={Smile} label="Odontograma" to="/dashboard/odontograma" isCollapsed={isCollapsed} />
+          {temPermissao('pacientes') && <NavItem icon={Users} label="Pacientes" to="/dashboard/pacientes" isCollapsed={isCollapsed} />}
+          {temPermissao('agenda') && <NavItem icon={Calendar} label="Agenda" to="/dashboard/agenda" isCollapsed={isCollapsed} />}
+          {temPermissao('recepcao') && <NavItem icon={MonitorPlay} label="Recepção" to="/dashboard/recepcao" isCollapsed={isCollapsed} />}
+          {temPermissao('prontuario') && <NavItem icon={ClipboardList} label="Prontuário Eletrônico" to="/dashboard/prontuario" isCollapsed={isCollapsed} />}
+          {temPermissao('odontograma') && <NavItem icon={Smile} label="Odontograma" to="/dashboard/odontograma" isCollapsed={isCollapsed} />}
 
           <div className={clsx("text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mt-5 mb-2", isCollapsed && "text-center px-0")}>
             {isCollapsed ? "•" : "Operacional"}
           </div>
-          <NavItem icon={Landmark} label="Caixa do Dia" to="/dashboard/caixa" isCollapsed={isCollapsed} />
-          <NavItem icon={Package} label="Estoque" to="/dashboard/estoque" isCollapsed={isCollapsed} />
-          <NavItem icon={BarChart2} label="Relatórios" to="/dashboard/relatorios" isCollapsed={isCollapsed} />
+          {temPermissao('caixa') && <NavItem icon={Landmark} label="Caixa do Dia" to="/dashboard/caixa" isCollapsed={isCollapsed} />}
+          {temPermissao('estoque') && <NavItem icon={Package} label="Estoque" to="/dashboard/estoque" isCollapsed={isCollapsed} />}
+          {temPermissao('relatorios') && <NavItem icon={BarChart2} label="Relatórios" to="/dashboard/relatorios" isCollapsed={isCollapsed} />}
 
           <div className={clsx("text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mt-5 mb-2", isCollapsed && "text-center px-0")}>
             {isCollapsed ? "•" : "Financeiro"}
           </div>
-          <NavGroup icon={DollarSign} label="Financeiro" defaultOpen={false} isCollapsed={isCollapsed} onExpand={() => setIsCollapsed(false)}>
-            <SubNavItem label="Dashboard" to="/dashboard/financeiro" />
-            <SubNavItem label="Recebimentos" to="/dashboard/financeiro/recebimentos" />
-          </NavGroup>
+          {temPermissao('financeiro') && (
+            <NavGroup icon={DollarSign} label="Financeiro" defaultOpen={false} isCollapsed={isCollapsed} onExpand={() => setIsCollapsed(false)}>
+              <SubNavItem label="Dashboard" to="/dashboard/financeiro" />
+              <SubNavItem label="Recebimentos" to="/dashboard/financeiro/recebimentos" />
+            </NavGroup>
+          )}
 
           <div className={clsx("text-[10px] font-bold uppercase tracking-widest px-3 mt-5 mb-2 opacity-50", isCollapsed && "text-center px-0")}>
             {isCollapsed ? "•" : "Administrativo"}
           </div>
-          <NavGroup icon={Settings} label="Administrativo" defaultOpen={false} isCollapsed={isCollapsed} onExpand={() => setIsCollapsed(false)}>
-            <SubNavItem label="Identidade Visual" to="/dashboard/admin/identidade" />
-            <SubNavItem label="Cadastro de Usuários" to="/dashboard/admin/usuarios" />
-            <SubNavItem label="Controle de Acesso" to="/dashboard/admin/controle" />
-            <SubNavItem label="Disparar Notificações" to="/dashboard/admin/notificacoes" />
-            <SubNavItem label="Cadastro de Unidades" to="/dashboard/admin/unidades" />
-            <SubNavItem label="Cadastro de Salas" to="/dashboard/admin/salas" />
-            <SubNavItem label="Atendimentos" to="/dashboard/admin/atendimentos" />
-            <SubNavItem label="Proc. Odontológicos" to="/dashboard/admin/odonto-proc" />
-            <SubNavItem label="Convênios" to="/dashboard/admin/convenios" />
-            <SubNavItem label="Custos & Laboratório" to="/dashboard/admin/dre" />
-            <SubNavItem label="Repasses Recepcionistas" to="/dashboard/admin/repasse-recep" />
-            <SubNavItem label="Registro de Atividades (Log)" to="/dashboard/auditoria" />
-          </NavGroup>
+          {temPermissao('admin') && (
+            <NavGroup icon={Settings} label="Administrativo" defaultOpen={false} isCollapsed={isCollapsed} onExpand={() => setIsCollapsed(false)}>
+              <SubNavItem label="Identidade Visual" to="/dashboard/admin/identidade" />
+              <SubNavItem label="Cadastro de Usuários" to="/dashboard/admin/usuarios" />
+              <SubNavItem label="Controle de Acesso" to="/dashboard/admin/controle" />
+              <SubNavItem label="Disparar Notificações" to="/dashboard/admin/notificacoes" />
+              <SubNavItem label="Cadastro de Unidades" to="/dashboard/admin/unidades" />
+              <SubNavItem label="Cadastro de Salas" to="/dashboard/admin/salas" />
+              <SubNavItem label="Atendimentos" to="/dashboard/admin/atendimentos" />
+              <SubNavItem label="Proc. Odontológicos" to="/dashboard/admin/odonto-proc" />
+              <SubNavItem label="Convênios" to="/dashboard/admin/convenios" />
+              <SubNavItem label="Custos & Laboratório" to="/dashboard/admin/dre" />
+              <SubNavItem label="Repasses Recepcionistas" to="/dashboard/admin/repasse-recep" />
+              <SubNavItem label="Registro de Atividades (Log)" to="/dashboard/auditoria" />
+            </NavGroup>
+          )}
 
-          <div className={clsx("text-[10px] font-bold uppercase tracking-widest px-3 mt-5 mb-2 opacity-50", isCollapsed && "text-center px-0")}>
-            {isCollapsed ? "•" : "Sistema"}
-          </div>
-          <NavGroup icon={Database} label="Banco de Dados" defaultOpen={false} isCollapsed={isCollapsed} onExpand={() => setIsCollapsed(false)}>
-            <SubNavItem label="Backup e Restauração" to="/dashboard/admin/backup" />
-          </NavGroup>
+          {(user?.is_dono || user?.role === 'administrador') && (
+            <>
+              <div className={clsx("text-[10px] font-bold uppercase tracking-widest px-3 mt-5 mb-2 opacity-50", isCollapsed && "text-center px-0")}>
+                {isCollapsed ? "•" : "Sistema"}
+              </div>
+              <NavGroup icon={Database} label="Banco de Dados" defaultOpen={false} isCollapsed={isCollapsed} onExpand={() => setIsCollapsed(false)}>
+                <SubNavItem label="Backup e Restauração" to="/dashboard/admin/backup" />
+              </NavGroup>
+            </>
+          )}
 
         </nav>
 
