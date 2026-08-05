@@ -72,14 +72,15 @@ const colorMap = {
 
 export function StatsCard({ icon: Icon, label, value, color = 'blue', subtitle }: StatsCardProps) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-      <div className="flex items-center gap-3">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 sm:p-4 h-full">
+      <div className="flex items-center gap-2 sm:gap-3">
         <div className={clsx('flex items-center justify-center shrink-0', colorMap[color])}>
-          <Icon size={28} />
+          <Icon size={22} className="sm:hidden" />
+          <Icon size={28} className="hidden sm:block" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-tight truncate" title={label}>{label}</p>
-          <p className="text-lg sm:text-xl font-bold text-slate-800 leading-tight truncate" title={String(value)}>{value}</p>
+          <p className="text-base sm:text-xl font-bold text-slate-800 leading-tight break-words" title={String(value)}>{value}</p>
           {subtitle && <p className="text-[10px] text-slate-400 mt-0.5 truncate" title={subtitle}>{subtitle}</p>}
         </div>
       </div>

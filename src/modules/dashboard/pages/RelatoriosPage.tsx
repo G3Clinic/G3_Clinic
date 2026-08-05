@@ -197,7 +197,7 @@ export function RelatoriosPage() {
       </Card>
 
       {/* KPIs Gerais */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7 gap-3">
         <StatsCard icon={DollarSign} label="Fat. Bruto" value={brl(fatBruto)} color="green" />
         <StatsCard icon={FileText} label="Ticket Médio" value={brl(ticketMedio)} color="blue" />
         <StatsCard icon={Users} label="Pac. Únicos" value={String(pacUnicos)} color="blue" />
