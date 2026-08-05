@@ -783,7 +783,7 @@ def get_pacientes(
 
 @app.get("/api/profissionais")
 def get_profissionais(
-    user=Depends(auth.get_current_user),
+    user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     profissionais = db.query(models.PerfilUsuario).filter(
