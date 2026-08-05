@@ -307,7 +307,7 @@ export interface APIPermissao { id: number; usuario_id: string; unidade_id: numb
 const perfisCrud = crudApi<APIUsuario>('perfis_usuarios');
 export const usuariosApi = {
   listar: perfisCrud.listar,
-  listarProfissionais: () => apiFetch<APIUsuario[]>('/profissionais'),
+  listarProfissionais: () => apiFetch<APIUsuario[]>('/api/profissionais'),
   atualizar: perfisCrud.atualizar,
   // delete dedicado: remove vínculos (filiais/permissões) antes, evitando erro de FK
   excluir: (id: string) =>
