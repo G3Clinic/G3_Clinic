@@ -783,13 +783,26 @@ def get_pacientes(
 
 @app.get("/api/profissionais")
 def get_profissionais(
-    user=Depends(get_current_user),
+    user=Depends(auth.get_current_user),
     db: Session = Depends(get_db),
+    x_filial_id: Optional[int] = Header(default=None, alias="X-Filial-Id"),
 ):
-    profissionais = db.query(models.PerfilUsuario).filter(
+    query = db.query(models.PerfilUsuario).filter(
         models.PerfilUsuario.empresa_id == user.empresa_id,
         (models.PerfilUsuario.role == "profissional_saude") | (models.PerfilUsuario.is_dono == True)
-    ).all()
+    )
+
+    if x_filial_id is not None:
+        from app.tenant_models import UsuarioFilial
+        query = query.outerjoin(
+            UsuarioFilial,
+            UsuarioFilial.usuario_id == models.PerfilUsuario.id
+        ).filter(
+            (models.PerfilUsuario.is_dono == True) | 
+            (UsuarioFilial.unidade_id == x_filial_id)
+        )
+
+    profissionais = query.all()
     return [{"id": p.id, "nome": p.nome, "role": p.role, "is_dono": p.is_dono} for p in profissionais]
 
 

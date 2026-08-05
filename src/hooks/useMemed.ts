@@ -56,6 +56,7 @@ const nascMemed = (iso?: string | null) => {
 export type MemedPacienteInput = {
   id: string | number; nome: string; sexo?: string | null;
   cpf?: string | null; data_nascimento?: string | null; telefone?: string | null; email?: string | null;
+  endereco?: string | null; cidade?: string | null;
 };
 export type MemedWorkplace = {
   id?: string | number; nome?: string; endereco?: string; telefone?: string; cidade?: string; uf?: string;
@@ -130,6 +131,8 @@ export function useMemed() {
       if (telNumbers.length >= 10) p.telefone = telNumbers.slice(-11);
     }
     if (paciente.email) p.email = paciente.email;
+    if (paciente.endereco) p.endereco = paciente.endereco;
+    if (paciente.cidade) p.cidade = paciente.cidade;
 
     // Aguarda o comando, mas com teto de tempo — se a Memed demorar/pendurar,
     // abrimos o módulo mesmo assim (o setPaciente também é reenviado após o show).

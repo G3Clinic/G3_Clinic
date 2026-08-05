@@ -203,7 +203,12 @@ export function ProntuarioPage() {
       return;
     }
     abrirPrescricao(
-      { id: paciente.id, nome: paciente.nome, sexo: paciente.sexo, cpf: paciente.cpf, data_nascimento: paciente.data_nascimento, telefone: paciente.telefone, email: paciente.email },
+      { 
+        id: paciente.id, nome: paciente.nome, sexo: paciente.sexo, cpf: paciente.cpf, 
+        data_nascimento: paciente.data_nascimento, telefone: paciente.telefone, email: paciente.email,
+        endereco: paciente.logradouro ? `${paciente.logradouro}${paciente.numero ? ', ' + paciente.numero : ''}${paciente.bairro ? ' - ' + paciente.bairro : ''}` : undefined,
+        cidade: paciente.cidade || undefined
+      },
       { nome: 'Clínica', uf: paciente.uf || undefined, cidade: paciente.cidade || undefined },
     );
   };
@@ -529,7 +534,7 @@ export function ProntuarioPage() {
                   <ReactQuill theme="snow" value={exames} onChange={setExames} modules={QUILL_MODULES}
                     className="h-72 mb-12" placeholder="Descreva os exames solicitados..." />
                 </div>
-                <div className="flex justify-end"><Btn icon={Save} onClick={() => salvarDoc('exames', exames)}>Salvar Exames</Btn></div>
+                <div className="flex justify-end"><Btn icon={Save} onClick={() => salvarDoc('exames', exames).then(() => alert('Exames salvos com sucesso!'))}>Salvar Exames</Btn></div>
               </div>
             )}
 
