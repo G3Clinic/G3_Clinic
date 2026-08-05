@@ -794,12 +794,12 @@ def get_profissionais(
 
     if x_filial_id is not None:
         from app.tenant_models import UsuarioFilial
-        query = query.outerjoin(
-            UsuarioFilial,
-            UsuarioFilial.usuario_id == models.PerfilUsuario.id
-        ).filter(
+        query = query.filter(
             (models.PerfilUsuario.is_dono == True) | 
-            (UsuarioFilial.unidade_id == x_filial_id)
+            db.query(UsuarioFilial).filter(
+                UsuarioFilial.usuario_id == models.PerfilUsuario.id,
+                UsuarioFilial.unidade_id == x_filial_id
+            ).exists()
         )
 
     profissionais = query.all()
