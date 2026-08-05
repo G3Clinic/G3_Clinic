@@ -201,7 +201,7 @@ export function AgendaPage() {
     salasApi.listar().then(setSalas).catch(() => {});
     procedimentosApi.listar().then(setProcedimentos).catch(() => {});
     conveniosApi.listar().then(setConvenios).catch(() => {});
-    usuariosApi.listar().then(us => setProfissionais(us.filter(u => u.role === 'profissional_saude' || u.is_dono))).catch(() => {});
+    usuariosApi.listarProfissionais().then(setProfissionais).catch(() => {});
   }, [carregarAg]);
 
   const nomePaciente = (id?: number | null) => pacientes.find(p => p.id === id)?.nome || 'Paciente';

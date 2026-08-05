@@ -781,6 +781,18 @@ def get_pacientes(
         models.Paciente.empresa_id == user.empresa_id
     ).all()
 
+@app.get("/api/profissionais")
+def get_profissionais(
+    user=Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    profissionais = db.query(models.PerfilUsuario).filter(
+        models.PerfilUsuario.empresa_id == user.empresa_id,
+        (models.PerfilUsuario.role == "profissional_saude") | (models.PerfilUsuario.is_dono == True)
+    ).all()
+    return [{"id": p.id, "nome": p.nome, "role": p.role, "is_dono": p.is_dono} for p in profissionais]
+
+
 
 def _get_paciente_do_tenant(db: Session, paciente_id: int, empresa_id: int):
     p = db.query(models.Paciente).filter(

@@ -290,7 +290,7 @@ export function AdminCadastroPage() {
             <div className="space-y-4 border-t border-gray-100 pt-4 mt-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <SelectField label="Conselho *" required value={form.conselho_tipo} onChange={e => setCampo('conselho_tipo', e.target.value)}>
-                  <option>CRM</option><option>CRO</option><option>CRP</option>
+                  <option>CRM</option><option>CRO</option><option>CRP</option><option>CREFITO</option><option>CRBM</option><option>CRF</option><option>COREN</option>
                 </SelectField>
                 <InputField label="Número do Registro *" required placeholder="Ex: 123456" value={form.conselho_numero} onChange={e => setCampo('conselho_numero', e.target.value)} />
                 <SelectField label="UF *" required value={form.conselho_uf} onChange={e => setCampo('conselho_uf', e.target.value)}>
@@ -340,7 +340,7 @@ export function AdminCadastroPage() {
             <div className="space-y-4 border-t border-gray-100 pt-4 mt-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <SelectField label="Conselho *" required value={form.conselho_tipo} onChange={e => setCampo('conselho_tipo', e.target.value)}>
-                  <option>CRM</option><option>CRO</option><option>CRP</option>
+                  <option>CRM</option><option>CRO</option><option>CRP</option><option>CREFITO</option><option>CRBM</option><option>CRF</option><option>COREN</option>
                 </SelectField>
                 <InputField label="Número do Registro *" required value={form.conselho_numero} onChange={e => setCampo('conselho_numero', e.target.value)} />
                 <SelectField label="UF *" required value={form.conselho_uf} onChange={e => setCampo('conselho_uf', e.target.value)}>
