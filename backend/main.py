@@ -783,7 +783,7 @@ def get_pacientes(
 
 @app.get("/api/profissionais")
 def get_profissionais(
-    user=Depends(auth.get_current_user),
+    user=Depends(get_current_user),
     db: Session = Depends(get_db),
     x_filial_id: Optional[int] = Header(default=None, alias="X-Filial-Id"),
 ):
