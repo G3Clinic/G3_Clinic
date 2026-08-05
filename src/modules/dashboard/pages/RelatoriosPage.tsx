@@ -3,9 +3,9 @@ import { BarChart, Users, FileText, Calendar, DollarSign, Activity, RefreshCcw, 
 import { PageHeader, Card, Btn, StatsCard, SelectField, InputField } from '../../../components/ui/shared';
 import {
   agendamentosApi, recebimentosApi, conveniosApi, procedimentosApi, usuariosApi,
-  pacientesApi, custosApi, recepcaoLabApi, configApi,
+  pacientesApi, custosApi, recepcaoLabApi, configApi, repasseRecepApi,
   type APIAgendamento, type APIRecebimento, type APIConvenio, type APIProcedimento, type APIUsuario,
-  type APIPaciente, type APICusto, type APIRecepcaoLab,
+  type APIPaciente, type APICusto, type APIRecepcaoLab, type APIRepasseRecep,
 } from '../../../services/api';
 
 type Tab = 'financeiro' | 'atendimentos' | 'producao' | 'dre' | 'laboratorio';
@@ -36,6 +36,7 @@ export function RelatoriosPage() {
   const [pacientes, setPacientes] = useState<APIPaciente[]>([]);
   const [custos, setCustos] = useState<APICusto[]>([]);
   const [trabalhosLab, setTrabalhosLab] = useState<APIRecepcaoLab[]>([]);
+  const [repassesRecep, setRepassesRecep] = useState<APIRepasseRecep[]>([]);
   const [taxaCartao, setTaxaCartao] = useState(0);
 
   const carregar = useCallback(() => {
@@ -47,6 +48,7 @@ export function RelatoriosPage() {
     pacientesApi.listar().then(setPacientes).catch(() => {});
     custosApi.listar().then(setCustos).catch(() => {});
     recepcaoLabApi.listar().then(setTrabalhosLab).catch(() => {});
+    repasseRecepApi.listar().then(setRepassesRecep).catch(() => {});
     configApi.obter('financeiro').then((f: any) => { if (f && f.taxaCartao) setTaxaCartao(Number(f.taxaCartao)); }).catch(() => {});
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
@@ -117,7 +119,30 @@ export function RelatoriosPage() {
   };
   const finalizadosF = agsF.filter(a => a.status === 'Finalizado');
   const totalRepasses = finalizadosF.reduce((s, a) => s + repasseDe(a), 0);
-  const lucro = fatBruto - totalCustos - totalRepasses;
+  
+  // Comissão das Recepcionistas (aproximação para o período)
+  // Como a regra pode ser Fixo ou % por consulta, vamos simplificar aplicando a regra 
+  // aos agendamentos finalizados do período criados pela recepcionista.
+  // No modelo atual, repassesRecep tem 'tipo', 'valor', 'status'.
+  // Para valores fixos (mensais), somamos proporcional ou o total se o filtro for maior que um mês (aqui simplificado).
+  let totalComissaoRecep = 0;
+  repassesRecep.forEach(r => {
+    if (r.tipo?.includes('Percentual')) {
+       // Acha todos os atendimentos do periodo e calcula a porcentagem do faturamento total
+       // Idealmente saberíamos quem agendou, mas como 'criado_por' não está em APIAgendamento (ou está escondido),
+       // vamos aplicar a comissão sobre o faturamento bruto apenas se a pessoa tiver vínculo.
+       // Se o dono não conseguir ver isso perfeitamente porque a api não retorna criado_por, faremos uma estimativa do DRE:
+       // Mas podemos filtrar os repasses pagos no mês. 
+       if (r.status === 'Pago' || r.status === 'Pendente') { // considera tudo do DRE
+         totalComissaoRecep += (fatBruto * (r.valor || 0)) / 100;
+       }
+    } else {
+       // Valor fixo mensal
+       totalComissaoRecep += r.valor || 0;
+    }
+  });
+
+  const lucro = fatBruto - totalCustos - totalRepasses - totalComissaoRecep;
   const margem = fatBruto ? Math.round((lucro / fatBruto) * 100) : 0;
   const repassesPorProf = profissionais.map(prof => {
     const doProf = finalizadosF.filter(a => a.profissional_id === prof.id);
@@ -361,8 +386,14 @@ export function RelatoriosPage() {
                 <div className="text-2xl font-bold text-gray-300">−</div>
                 <div className="text-center">
                   <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-2"><Users size={24} /></div>
-                  <p className="text-sm font-semibold text-slate-500">Repasses</p>
+                  <p className="text-sm font-semibold text-slate-500">Repasses (Médicos)</p>
                   <p className="text-xl font-bold text-orange-600">{brl(totalRepasses)}</p>
+                </div>
+                <div className="text-2xl font-bold text-gray-300">-</div>
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-2"><Users size={24} /></div>
+                  <p className="text-sm font-semibold text-slate-500">Comissões (Recepção)</p>
+                  <p className="text-xl font-bold text-purple-600">{brl(totalComissaoRecep)}</p>
                 </div>
                 <div className="text-2xl font-bold text-gray-300">=</div>
                 <div className="text-center bg-white p-4 rounded-xl shadow-sm border border-emerald-100 min-w-[200px]">

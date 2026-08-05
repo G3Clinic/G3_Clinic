@@ -227,7 +227,8 @@ export function PacientesPage() {
         nome: form.nome.trim(),
         cpf: form.cpf.trim(),
         telefone: form.telefone.trim() || undefined,
-        unidade_id: form.unidade_id ? Number(form.unidade_id) : undefined,
+        // unidade_id omitido para cadastro global
+
         data_nascimento: form.data_nascimento || undefined,
         sexo: form.sexo || undefined,
         genero: form.genero || undefined,
@@ -613,11 +614,6 @@ export function PacientesPage() {
             <h4 className="text-sm font-bold text-slate-700 border-b border-gray-100 pb-2 mt-6">Dados Complementares (Opcionais)</h4>
             <div className="grid grid-cols-2 gap-4">
               <InputField label="Gênero" placeholder="Ex: Não-binário" value={form.genero} onChange={e => setCampo('genero', e.target.value)} />
-              <SelectField label="Unidade de Cadastro"
-                value={form.unidade_id} onChange={e => setCampo('unidade_id', e.target.value)}>
-                <option value="">Selecione...</option>
-                {filiais.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
-              </SelectField>
               <InputField label="Nome da Mãe" placeholder="Nome completo da mãe" className="col-span-2" value={form.nome_mae} onChange={e => setCampo('nome_mae', e.target.value)} />
               <InputField label="E-mail" type="email" placeholder="paciente@email.com" className="col-span-2" value={form.email} onChange={e => setCampo('email', e.target.value)} />
             </div>

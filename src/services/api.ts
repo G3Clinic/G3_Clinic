@@ -456,6 +456,7 @@ export const eventosApi = crudApi<APIEvento>('eventos_auditoria');
 export interface APICaixaLancamento {
   id: string; tipo?: string | null; descricao?: string | null; paciente_id?: number | null;
   valor?: number | null; forma_pagamento?: string | null; data?: string | null; criado_em?: string | null;
+  criado_por?: string | null;
 }
 export const caixaLancamentosApi = crudApi<APICaixaLancamento>('caixa_lancamentos');
 

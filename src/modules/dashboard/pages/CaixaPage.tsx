@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Landmark, ArrowUpCircle, ArrowDownCircle, Lock, DollarSign, Wallet, Unlock, Clock } from 'lucide-react';
 import { PageHeader, Card, Btn, StatsCard, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
-import { caixaLancamentosApi, caixaApi, type APICaixaLancamento } from '../../../services/api';
+import { caixaLancamentosApi, caixaApi, usuariosApi, type APICaixaLancamento, type APIUsuario } from '../../../services/api';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const PAGAMENTOS = ['Dinheiro', 'PIX', 'Cartão de Crédito', 'Cartão de Débito'];
 const hojeISO = () => new Date().toISOString().split('T')[0];
@@ -16,13 +17,24 @@ export function CaixaPage() {
 
   const [turno, setTurno] = useState<{ aberto: boolean; data_abertura?: string; abertura_origem?: string }>({ aberto: false });
 
+  const { user } = useAuth();
+  const [usuarios, setUsuarios] = useState<APIUsuario[]>([]);
+  const [filtroUsuario, setFiltroUsuario] = useState(user?.role === 'administrador' || user?.is_dono ? '' : user?.id || '');
+
   const carregar = useCallback(() => {
     caixaLancamentosApi.listar().then(setLancamentos).catch(() => {});
     caixaApi.turnoAberto().then(setTurno).catch(() => setTurno({ aberto: false }));
-  }, []);
+    if (user?.role === 'administrador' || user?.is_dono) {
+      usuariosApi.listar().then(setUsuarios).catch(() => {});
+    }
+  }, [user]);
   useEffect(() => { carregar(); }, [carregar]);
 
-  const doDia = lancamentos.filter(l => (l.data || (l.criado_em || '').slice(0, 10)) === hojeISO());
+  const doDia = lancamentos.filter(l => {
+    const isHoje = (l.data || (l.criado_em || '').slice(0, 10)) === hojeISO();
+    const isUser = !filtroUsuario || l.criado_por === filtroUsuario;
+    return isHoje && isUser;
+  });
   const somaForma = (formas: string[], t: 'ENTRADA' | 'SAIDA' = 'ENTRADA') =>
     doDia.filter(l => l.tipo === t && formas.includes(l.forma_pagamento || '')).reduce((s, l) => s + (l.valor || 0), 0);
   const entradasDinheiro = somaForma(['Dinheiro']);
@@ -56,18 +68,45 @@ export function CaixaPage() {
     } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao fechar o caixa.'); }
   };
   const horaBR = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+  
+  const handlePrint = () => {
+    window.print();
+  };
 
   return (
-    <div className="space-y-6">
-      <PageHeader icon={Landmark} title="Caixa do Dia" subtitle="Controle de fluxo de caixa, pagamentos e recebimentos diários">
-        <div className="flex gap-2 items-center">
-          <Btn variant="secondary" icon={ArrowDownCircle} onClick={() => abrirModal('SAIDA')} className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200">Nova Saída</Btn>
-          <Btn icon={ArrowUpCircle} onClick={() => abrirModal('ENTRADA')} className="bg-emerald-500 hover:bg-emerald-600 border-none shadow-emerald-500/20 shadow-sm">Nova Entrada</Btn>
+    <div className="space-y-6 print:space-y-4">
+      <div className="print:hidden">
+        <PageHeader icon={Landmark} title="Caixa do Dia" subtitle="Controle de fluxo de caixa, pagamentos e recebimentos diários">
+          <div className="flex gap-2 items-center">
+            {(user?.role === 'administrador' || user?.is_dono) && (
+              <select 
+                value={filtroUsuario} 
+                onChange={e => setFiltroUsuario(e.target.value)}
+                className="px-3 py-2 text-sm rounded-xl border border-gray-200 bg-white mr-2"
+              >
+                <option value="">Todos os Caixas</option>
+                {usuarios.map(u => (
+                  <option key={u.id} value={u.id}>{u.nome}</option>
+                ))}
+              </select>
+            )}
+            <Btn variant="secondary" onClick={handlePrint} className="mr-2">Imprimir</Btn>
+            <Btn variant="secondary" icon={ArrowDownCircle} onClick={() => abrirModal('SAIDA')} className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200">Nova Saída</Btn>
+            <Btn icon={ArrowUpCircle} onClick={() => abrirModal('ENTRADA')} className="bg-emerald-500 hover:bg-emerald-600 border-none shadow-emerald-500/20 shadow-sm">Nova Entrada</Btn>
           {turno.aberto
             ? <Btn variant="danger" icon={Lock} className="ml-2" onClick={fecharCaixa}>Fechar Caixa</Btn>
             : <Btn icon={Unlock} className="ml-2" onClick={abrirCaixa}>Abrir Caixa</Btn>}
         </div>
       </PageHeader>
+      </div>
+
+      <div className="hidden print:block text-center mb-8">
+        <h1 className="text-2xl font-bold">Fechamento de Caixa</h1>
+        <p className="text-slate-500">Data: {new Date().toLocaleDateString('pt-BR')}</p>
+        {(user?.role === 'administrador' || user?.is_dono) && filtroUsuario && (
+          <p className="text-sm text-slate-500">Operador: {usuarios.find(u => u.id === filtroUsuario)?.nome}</p>
+        )}
+      </div>
 
       {/* Status do turno de caixa */}
       <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm ${turno.aberto ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>

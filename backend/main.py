@@ -358,12 +358,49 @@ def _lancar_no_caixa(db: Session, user, *, valor, descricao, paciente_id=None,
 def _valor_do_agendamento(db: Session, ag, empresa_id: int) -> float:
     valor = ag.valor_cobrado
     if not valor and ag.procedimento_id:
-        proc = db.query(clinica_models.Procedimento).filter(
-            clinica_models.Procedimento.id == ag.procedimento_id,
-            clinica_models.Procedimento.empresa_id == empresa_id,
+        proc = db.query(clinica_models.ProcedimentoOdontologico).filter(
+            clinica_models.ProcedimentoOdontologico.id == ag.procedimento_id,
+            clinica_models.ProcedimentoOdontologico.empresa_id == empresa_id,
         ).first()
-        valor = proc.valor_padrao if proc else 0
+        if proc:
+            valor = proc.valor_base
     return float(valor or 0)
+
+
+def _processar_repasse_medico(db: Session, user, ag_id, valor, nome_pac, forma_pagamento):
+    """Verifica se o agendamento tem repasse e lança uma SAÍDA no caixa do dia."""
+    ag = db.query(clinica_models.Agendamento).filter(clinica_models.Agendamento.id == ag_id).first()
+    if not ag or not ag.profissional_id or not ag.procedimento_id:
+        return
+        
+    proc = db.query(clinica_models.Procedimento).filter(clinica_models.Procedimento.id == ag.procedimento_id).first()
+    if not proc:
+        proc = db.query(clinica_models.ProcedimentoOdontologico).filter(clinica_models.ProcedimentoOdontologico.id == ag.procedimento_id).first()
+        
+    if not proc:
+        return
+        
+    val_rep = proc.valor_repasse or 0
+    tipo_rep = proc.tipo_repasse or "fixo"
+    
+    repasse_final = 0
+    if tipo_rep == "percentual":
+        repasse_final = (valor or 0) * (val_rep / 100)
+    else:
+        repasse_final = val_rep
+        
+    if repasse_final > 0:
+        prof = db.query(clinica_models.Usuario).filter(clinica_models.Usuario.id == ag.profissional_id).first()
+        nome_prof = prof.nome if prof else "Profissional"
+        
+        saida = clinica_models.CaixaLancamento(
+            empresa_id=user.empresa_id, unidade_id=ag.unidade_id, tipo="SAIDA",
+            descricao=f"Repasse Profissional - {nome_prof} ({nome_pac})", 
+            paciente_id=ag.paciente_id, valor=repasse_final,
+            forma_pagamento=forma_pagamento, data=date.today(), criado_por=user.id,
+        )
+        db.add(saida)
+        db.flush()
 
 
 # --- Odontograma: semear especialidades + intervenções padrão (idempotente) ---
@@ -485,6 +522,7 @@ def finalizar_atendimento(
                                     paciente_id=ag.paciente_id, forma_pagamento=pago.forma_pagamento,
                                     descricao=f"Atendimento pago — {nome_pac}")
             lancamento_id = lanc.id
+            _processar_repasse_medico(db, user, ag.id, valor, nome_pac, pago.forma_pagamento)
             registrar_evento(db, user, "finalização", "recepcao", "agendamentos", ag.id,
                              f'Finalizou atendimento de "{nome_pac}" (pago) — R$ {valor:.2f} no caixa')
         else:
@@ -542,6 +580,10 @@ def baixar_recebimento(
     lanc = _lancar_no_caixa(db, user, valor=rec.valor, unidade_id=rec.unidade_id,
                             paciente_id=rec.paciente_id, forma_pagamento=forma,
                             descricao=f"Pagamento — {nome_pac}")
+    
+    if rec.agendamento_id:
+        _processar_repasse_medico(db, user, rec.agendamento_id, rec.valor, nome_pac, forma)
+        
     registrar_evento(db, user, "alteração", "caixa", "recebimentos", rec.id,
                      f'Baixa de pagamento — R$ {(rec.valor or 0):.2f} ({nome_pac})')
     db.commit()

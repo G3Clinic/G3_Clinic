@@ -279,15 +279,27 @@ export function AgendaPage() {
       return;
     }
 
-    // Ocupação da sala que SOBREPÕE a faixa do novo agendamento (ignora
-    // cancelados/faltas e o próprio). Considera atendimentos multi-hora.
-    const [ni, nf] = faixaHoras(form.hora_inicio, form.hora_fim);
+    // Converte HH:MM para minutos totais para comparação exata
+    const toMin = (h?: string | null) => {
+      if (!h) return 0;
+      const [hh, mm] = h.split(':').map(Number);
+      return (hh || 0) * 60 + (mm || 0);
+    };
+
+    const ni = toMin(form.hora_inicio);
+    const nf = form.hora_fim ? toMin(form.hora_fim) : ni + 30; // assume 30m se não tiver fim
+
+    // Ocupação da sala que SOBREPÕE a faixa do novo agendamento (ignora cancelados/faltas)
     const ocupacao = agendamentos.filter(a => {
       if (a.id === editandoId || a.sala_id !== form.sala_id) return false;
       if (a.data_agendamento !== form.data_agendamento) return false;
       if (['Cancelado', 'Falta'].includes(a.status || '')) return false;
-      const [ai, af] = faixaHoras(a.hora_inicio, a.hora_fim);
-      return ai <= nf && ni <= af; // sobreposição de faixas
+      
+      const ai = toMin(a.hora_inicio);
+      const af = a.hora_fim ? toMin(a.hora_fim) : ai + 30;
+      
+      // Sobreposição: Início de um é antes do fim do outro, e vice-versa (exclusivo nos limites)
+      return ai < nf && ni < af;
     }).length;
     const capacidade = sala?.capacidade && sala.capacidade > 0 ? sala.capacidade : 1;
 
