@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Users, Search, UserPlus, Edit, FileText, Trash2, ArrowLeft, Calendar, FileSpreadsheet, Activity, Stethoscope, Camera, ClipboardList, Pill, AlertTriangle, Save, X, Upload, ImageIcon, Loader2, DollarSign } from 'lucide-react';
+import { Users, Search, UserPlus, Edit, FileText, Trash2, ArrowLeft, Calendar, Activity, Stethoscope, Camera, ClipboardList, Pill, AlertTriangle, Save, X, Upload, ImageIcon, Loader2, DollarSign } from 'lucide-react';
 import { PageHeader, Card, Btn, Modal, InputField, SelectField, Badge } from '../../../components/ui/shared';
 import { useNavigate } from 'react-router-dom';
 import { cidApi, memedApi, consultasApi, pacientesApi, filiaisApi, orcamentosApi, configApi, uploadArquivo, pacienteStore, type CIDItem, type APIPaciente, type APIFilial, type APIConsulta, type APIOrcamento } from '../../../services/api';
@@ -106,6 +106,11 @@ export function PacientesPage() {
     if (perfilAtivo) pacienteStore.set({ id: Number(perfilAtivo.id), nome: perfilAtivo.nome });
     navigate('/dashboard/odontograma');
   };
+  // Leva o paciente do perfil para o Prontuário Eletrônico (triagem, evolução, exames, receituário, atestado)
+  const irProntuario = () => {
+    if (perfilAtivo) pacienteStore.set({ id: Number(perfilAtivo.id), nome: perfilAtivo.nome });
+    navigate('/dashboard/prontuario');
+  };
   const [modalConsultaOpen, setModalConsultaOpen] = useState(false);
   const [perfilTab, setPerfilTab] = useState('historico');
   const navigate = useNavigate();
@@ -175,6 +180,17 @@ export function PacientesPage() {
       .then(setFiliais)
       .catch(err => console.error('Erro ao carregar filiais:', err));
   }, []);
+
+  // Paciente "levado" de outra tela (ex.: Recepção → Ficha do Paciente) — one-shot
+  useEffect(() => {
+    if (perfilAtivo || pacientes.length === 0) return;
+    const alvo = pacienteStore.get();
+    if (!alvo) return;
+    pacienteStore.clear();
+    const p = pacientes.find(x => Number(x.id) === Number(alvo.id));
+    if (p) setPerfilAtivo(p);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pacientes]);
 
   const abrirNovoPaciente = () => {
     setEditandoId(null);
@@ -1242,13 +1258,13 @@ export function PacientesPage() {
               <Activity size={24} className="text-brand-primary" />
               <span className="font-bold text-sm text-slate-700">Odontograma</span>
             </button>
+            <button onClick={irProntuario} className="p-4 border border-gray-200 rounded-xl hover:border-brand-primary hover:bg-brand-light/20 flex flex-col items-center justify-center gap-2 transition-colors">
+              <Stethoscope size={24} className="text-brand-primary" />
+              <span className="font-bold text-sm text-slate-700">Prontuário Eletrônico</span>
+            </button>
             <button onClick={() => { setModalConsultaOpen(false); setPerfilTab('nova_consulta'); }} className="p-4 border border-gray-200 rounded-xl hover:border-brand-primary hover:bg-brand-light/20 flex flex-col items-center justify-center gap-2 transition-colors">
               <ClipboardList size={24} className="text-brand-primary" />
               <span className="font-bold text-sm text-slate-700">Consulta Direta (Perfil)</span>
-            </button>
-            <button onClick={() => setModalConsultaOpen(false)} className="p-4 border border-gray-200 rounded-xl hover:border-brand-primary hover:bg-brand-light/20 flex flex-col items-center justify-center gap-2 transition-colors">
-              <FileSpreadsheet size={24} className="text-brand-primary" />
-              <span className="font-bold text-sm text-slate-700">Exames / Imagens</span>
             </button>
             <button onClick={() => setModalConsultaOpen(false)} className="p-4 border border-gray-200 rounded-xl hover:border-brand-primary hover:bg-brand-light/20 flex flex-col items-center justify-center gap-2 transition-colors">
               <Calendar size={24} className="text-brand-primary" />

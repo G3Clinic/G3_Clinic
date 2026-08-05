@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { DollarSign, Lock, Calendar, Plus, TrendingUp, X } from 'lucide-react';
-import { PageHeader, Card, Btn, InputField } from '../../../components/ui/shared';
+import { PageHeader, Card, Btn, InputField, SelectField } from '../../../components/ui/shared';
 import { procedimentosApi, finLancamentosApi, type APIProcedimento, type APIFinLancamento } from '../../../services/api';
 
 const mesAtual = () => new Date().toISOString().slice(0, 7);
@@ -13,20 +13,28 @@ export function FinDashboardPage() {
   const [novoNome, setNovoNome] = useState('');
   const [novoValor, setNovoValor] = useState('');
   const [novoRep, setNovoRep] = useState('');
+  const [novoTipoRep, setNovoTipoRep] = useState<'fixo' | 'percentual'>('fixo');
 
   const carregarProc = useCallback(() => { procedimentosApi.listar().then(setProcedimentos).catch(() => {}); }, []);
   const carregarLanc = useCallback(() => { finLancamentosApi.listar().then(setLancamentos).catch(() => {}); }, []);
   useEffect(() => { carregarProc(); carregarLanc(); }, [carregarProc, carregarLanc]);
 
-  const rep = (p: APIProcedimento) => p.valor_repasse || 0;                 // % profissional
-  const valClinica = (p: APIProcedimento) => (p.valor_padrao || 0) * (1 - rep(p) / 100);
+  // Repasse por unidade — respeita o tipo cadastrado (fixo em R$ ou percentual sobre o valor).
+  // Antes disto o cadastro rápido gravava sempre "percentual", mesmo quando o valor era um
+  // repasse fixo em reais — inflava o repasse e distorcia a margem retida pela clínica.
+  const rep = (p: APIProcedimento) => {
+    const tipo = p.tipo_repasse || 'fixo';
+    const val = p.valor_repasse || 0;
+    return tipo === 'percentual' ? (p.valor_padrao || 0) * (val / 100) : val;
+  };
+  const valClinica = (p: APIProcedimento) => (p.valor_padrao || 0) - rep(p);
   const qtd = (procId: string) => lancamentos.find(l => l.procedimento_id === procId && l.mes === mes)?.quantidade || 0;
 
   const adicionar = async () => {
     if (!novoNome.trim()) return;
     try {
-      await procedimentosApi.criar({ nome: novoNome.trim(), tipo: 'consulta', valor_padrao: novoValor ? Number(novoValor) : 0, valor_repasse: novoRep ? Number(novoRep) : 0, tipo_repasse: 'percentual' });
-      setNovoNome(''); setNovoValor(''); setNovoRep(''); carregarProc();
+      await procedimentosApi.criar({ nome: novoNome.trim(), tipo: 'consulta', valor_padrao: novoValor ? Number(novoValor) : 0, valor_repasse: novoRep ? Number(novoRep) : 0, tipo_repasse: novoTipoRep });
+      setNovoNome(''); setNovoValor(''); setNovoRep(''); setNovoTipoRep('fixo'); carregarProc();
     } catch (e) { alert(e instanceof Error ? e.message : 'Erro.'); }
   };
   const remover = async (p: APIProcedimento) => { if (confirm(`Remover "${p.nome}" do cardápio?`)) { await procedimentosApi.excluir(p.id); carregarProc(); } };
@@ -46,7 +54,7 @@ export function FinDashboardPage() {
   };
 
   const bruto = procedimentos.reduce((s, p) => s + (p.valor_padrao || 0) * qtd(p.id), 0);
-  const repassado = procedimentos.reduce((s, p) => s + (p.valor_padrao || 0) * (rep(p) / 100) * qtd(p.id), 0);
+  const repassado = procedimentos.reduce((s, p) => s + rep(p) * qtd(p.id), 0);
   const retido = bruto - repassado;
   const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -71,7 +79,13 @@ export function FinDashboardPage() {
             <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col sm:flex-row gap-3 items-end mb-4 shrink-0">
               <div className="flex-1 w-full"><InputField label="Nome do Procedimento" placeholder="ex: Consulta Clínica" value={novoNome} onChange={e => setNovoNome(e.target.value)} /></div>
               <div className="w-full sm:w-28"><InputField label="Valor (R$)" type="number" placeholder="190" value={novoValor} onChange={e => setNovoValor(e.target.value)} /></div>
-              <div className="w-full sm:w-28"><InputField label="% Profissional" type="number" placeholder="40" value={novoRep} onChange={e => setNovoRep(e.target.value)} /></div>
+              <div className="w-full sm:w-32">
+                <SelectField label="Tipo Repasse" value={novoTipoRep} onChange={e => setNovoTipoRep(e.target.value as 'fixo' | 'percentual')}>
+                  <option value="fixo">Fixo (R$)</option>
+                  <option value="percentual">Percentual (%)</option>
+                </SelectField>
+              </div>
+              <div className="w-full sm:w-28"><InputField label={novoTipoRep === 'percentual' ? '% Profissional' : 'Repasse (R$)'} type="number" placeholder={novoTipoRep === 'percentual' ? '40' : '80'} value={novoRep} onChange={e => setNovoRep(e.target.value)} /></div>
               <Btn icon={Plus} className="w-full sm:w-auto" onClick={adicionar}>Adicionar</Btn>
             </div>
             <div className="flex-1 overflow-y-auto border border-gray-100 rounded-xl">
@@ -79,7 +93,7 @@ export function FinDashboardPage() {
                 <thead className="bg-gray-50 sticky top-0"><tr>
                   <th className="text-left px-4 py-3 text-xs font-bold text-slate-500">Procedimento</th>
                   <th className="text-center px-4 py-3 text-xs font-bold text-slate-500">Valor (R$)</th>
-                  <th className="text-center px-4 py-3 text-xs font-bold text-slate-500">% Prof.</th>
+                  <th className="text-center px-4 py-3 text-xs font-bold text-slate-500">Repasse</th>
                   <th className="text-center px-4 py-3 text-xs font-bold text-slate-500">Val. Clínica</th><th></th>
                 </tr></thead>
                 <tbody className="divide-y divide-gray-50">
@@ -88,7 +102,7 @@ export function FinDashboardPage() {
                       <tr key={p.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-semibold text-slate-700">{p.nome}</td>
                         <td className="px-4 py-3 text-center text-slate-600">R$ {fmt(p.valor_padrao || 0)}</td>
-                        <td className="px-4 py-3 text-center text-slate-600">{rep(p)}%</td>
+                        <td className="px-4 py-3 text-center text-slate-600">{(p.tipo_repasse || 'fixo') === 'percentual' ? `${p.valor_repasse || 0}%` : `R$ ${fmt(p.valor_repasse || 0)}`}</td>
                         <td className="px-4 py-3 text-center font-bold text-emerald-600">R$ {fmt(valClinica(p))}</td>
                         <td className="px-4 py-3 text-center"><button onClick={() => remover(p)} className="text-slate-400 hover:text-red-500"><X size={14} /></button></td>
                       </tr>
@@ -113,7 +127,7 @@ export function FinDashboardPage() {
                   <div key={p.id} className="flex items-center gap-4 p-3 border border-gray-100 rounded-xl hover:border-brand-primary/30 hover:bg-brand-light/10 transition-colors">
                     <div className="flex-1">
                       <p className="font-bold text-slate-700 text-sm">{p.nome}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">R$ {fmt(p.valor_padrao || 0)} • Repasse {rep(p)}%</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">R$ {fmt(p.valor_padrao || 0)} • Repasse {(p.tipo_repasse || 'fixo') === 'percentual' ? `${p.valor_repasse || 0}%` : `R$ ${fmt(rep(p))}`}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-slate-500">Qtd:</span>

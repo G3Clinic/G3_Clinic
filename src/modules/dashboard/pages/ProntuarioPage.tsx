@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ClipboardList, Search, User, FileText, Activity, Stethoscope, FileSymlink, AlertCircle, Plus, Trash2, Pill, BookText, Save, Edit2, Settings, ChevronRight, Syringe, AlertTriangle } from 'lucide-react';
+import { ClipboardList, Search, User, FileText, Activity, Stethoscope, FileSymlink, AlertCircle, Plus, Trash2, Pill, BookText, Save, Edit2, Settings, ChevronRight, Syringe, AlertTriangle, Printer } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, InputField, Modal } from '../../../components/ui/shared';
 import {
   pacientesApi, atendimentosClinicosApi, evolucoesApi, documentosApi, modelosProntuarioApi,
@@ -9,6 +9,9 @@ import {
 import ReactQuill, { Quill } from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { useMemed } from '../../../hooks/useMemed';
+import { useTheme } from '../../../contexts/ThemeContext';
+import { useAuth } from '../../../contexts/AuthContext';
+import { imprimirDocumento, escapeHtml } from '../../../utils/print';
 
 // Linha divisória (<hr>) no editor — blot custom registrado uma única vez no módulo
 const BlockEmbed: any = Quill.import('blots/block/embed');
@@ -47,12 +50,29 @@ type TabId = 'vacinacao' | 'triagem' | 'evolucao' | 'exames' | 'receituario' | '
 const idade = (nasc?: string) => nasc ? Math.floor((Date.now() - new Date(nasc).getTime()) / 31557600000) : null;
 
 export function ProntuarioPage() {
+  const { theme } = useTheme();
+  const { user } = useAuth();
   const [pacientes, setPacientes] = useState<APIPaciente[]>([]);
   const [busca, setBusca] = useState('');
   const [paciente, setPaciente] = useState<APIPaciente | null>(null);
   const [atendimentoId, setAtendimentoId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('triagem');
   const [anamnese, setAnamnese] = useState<any>(null);
+
+  // Impressão formatada (exames, receituário, atestado) — cabeçalho da clínica + dados do paciente + assinatura
+  const conselhoLabel = (u: typeof user) => u?.conselho_tipo && u?.conselho_numero
+    ? `${u.conselho_tipo} ${u.conselho_numero}${u.conselho_uf ? '/' + u.conselho_uf : ''}` : undefined;
+  const imprimir = (titulo: string, conteudoHtml: string, rodapeExtra?: string) => {
+    if (!paciente) return;
+    imprimirDocumento({
+      titulo,
+      empresa: { nome: theme.companyName || 'Clínica', logoUrl: theme.logoFullUrl || theme.logoIconUrl || undefined },
+      paciente: { nome: paciente.nome, cpf: paciente.cpf, dataNascimento: paciente.data_nascimento },
+      medico: { nome: user?.nome, conselho: conselhoLabel(user) },
+      conteudoHtml,
+      rodapeExtra,
+    });
+  };
 
   // triagem
   const [tri, setTri] = useState<Record<string, string>>({});
@@ -292,6 +312,12 @@ export function ProntuarioPage() {
     await salvarDoc('receituario', arr);
   };
   const salvarAtestado = async () => { await salvarDoc('atestado', atestado); alert('Atestado salvo!'); };
+
+  const receituarioHtml = () => receita.length === 0
+    ? '<p><em>Nenhum medicamento prescrito.</em></p>'
+    : '<ol>' + receita.map(m =>
+        `<li><strong>${escapeHtml(m.medicamento)}</strong>${m.quantidade ? ' — ' + escapeHtml(m.quantidade) : ''}${m.posologia ? `<br/><span style="font-size:12px;color:#475569;">${escapeHtml(m.posologia)}</span>` : ''}</li>`
+      ).join('') + '</ol>';
 
   // Modelos prontos de atestado (já com dados do paciente/data)
   const hojeBR = () => new Date().toLocaleDateString('pt-BR');
@@ -534,7 +560,10 @@ export function ProntuarioPage() {
                   <ReactQuill theme="snow" value={exames} onChange={setExames} modules={QUILL_MODULES}
                     className="h-72 mb-12" placeholder="Descreva os exames solicitados..." />
                 </div>
-                <div className="flex justify-end"><Btn icon={Save} onClick={() => salvarDoc('exames', exames).then(() => alert('Exames salvos com sucesso!'))}>Salvar Exames</Btn></div>
+                <div className="flex justify-end gap-2">
+                  <Btn icon={Printer} variant="outline" disabled={!exames.replace(/<[^>]*>/g, '').trim()} onClick={() => imprimir('Solicitação de Exames', exames)}>Imprimir</Btn>
+                  <Btn icon={Save} onClick={() => salvarDoc('exames', exames).then(() => alert('Exames salvos com sucesso!'))}>Salvar Exames</Btn>
+                </div>
               </div>
             )}
 
@@ -576,6 +605,9 @@ export function ProntuarioPage() {
                           {m.posologia && <div className="text-xs text-slate-600 mt-0.5 pl-1">{m.posologia}</div>}
                         </li>
                       ))}</ol>}
+                </div>
+                <div className="flex justify-end">
+                  <Btn icon={Printer} variant="outline" disabled={receita.length === 0} onClick={() => imprimir('Receituário Médico', receituarioHtml())}>Imprimir Receituário</Btn>
                 </div>
 
                 {/* Prescrição Digital (Memed) */}
@@ -622,7 +654,10 @@ export function ProntuarioPage() {
                       className="h-56 mb-12" placeholder="Escolha um modelo acima ou escreva o atestado…" />
                   </div>
                 </div>
-                <div className="flex justify-end"><Btn icon={Save} onClick={salvarAtestado}>Salvar Atestado</Btn></div>
+                <div className="flex justify-end gap-2">
+                  <Btn icon={Printer} variant="outline" disabled={!atestado.texto.replace(/<[^>]*>/g, '').trim()} onClick={() => imprimir('Atestado', atestado.texto, atestado.cid ? `CID: ${atestado.cid}` : undefined)}>Imprimir</Btn>
+                  <Btn icon={Save} onClick={salvarAtestado}>Salvar Atestado</Btn>
+                </div>
               </div>
             )}
           </div>
