@@ -792,15 +792,15 @@ def get_profissionais(
         (models.PerfilUsuario.role == "profissional_saude") | (models.PerfilUsuario.is_dono == True)
     )
 
-    if x_filial_id is not None:
-        from app.tenant_models import UsuarioFilial
-        query = query.filter(
-            (models.PerfilUsuario.is_dono == True) | 
-            db.query(UsuarioFilial).filter(
-                UsuarioFilial.usuario_id == models.PerfilUsuario.id,
-                UsuarioFilial.unidade_id == x_filial_id
-            ).exists()
-        )
+    # if x_filial_id is not None:
+    #     from app.tenant_models import UsuarioFilial
+    #     query = query.filter(
+    #         (models.PerfilUsuario.is_dono == True) | 
+    #         db.query(UsuarioFilial).filter(
+    #             UsuarioFilial.usuario_id == models.PerfilUsuario.id,
+    #             UsuarioFilial.unidade_id == x_filial_id
+    #         ).exists()
+    #     )
 
     profissionais = query.all()
     return [{"id": p.id, "nome": p.nome, "role": p.role, "is_dono": p.is_dono} for p in profissionais]
