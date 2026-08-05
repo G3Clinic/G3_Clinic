@@ -462,7 +462,7 @@ export function AgendaPage() {
                       return (
                         <div key={ag.id} onClick={e => { e.stopPropagation(); abrirEdicao(ag); }}
                           title={`${nomePaciente(ag.paciente_id)}${prof ? ' • ' + prof : ''}${sala ? ' • ' + sala.nome : ''} • ${ag.hora_inicio || ''}${ag.hora_fim ? '–' + ag.hora_fim : ''}`}
-                          style={{ position: 'absolute', top: top + 1, height: Math.max(altura - 2, 16), left: `calc(${left}% + 2px)`, width: `calc(${width}% - 4px)` }}
+                          style={{ position: 'absolute', top: top + 1, height: Math.max(altura - 2, 16), left: `calc(${left}% + 2px)`, width: `calc(${width}% - 14px)` }}
                           className={`rounded-md border-2 px-1 py-0.5 overflow-hidden hover:shadow-md hover:z-30 transition-shadow z-20 ${corSala(ag.sala_id)}`}>
                           <p className="text-[9px] font-bold text-slate-800 leading-tight truncate">{nomePaciente(ag.paciente_id)}</p>
                           <p className="text-[8px] text-slate-600 leading-tight truncate">{ag.hora_inicio || ''}{ag.hora_fim ? '–' + ag.hora_fim : ''}</p>
@@ -482,12 +482,12 @@ export function AgendaPage() {
         <div className="space-y-4">
           <div className="flex items-end gap-2">
             <div className="flex-1">
-              <SelectField label="Paciente *" required value={form.paciente_id} onChange={e => setCampo('paciente_id', e.target.value)}>
+              <SelectField label="Paciente *" required value={form.paciente_id} onChange={e => setCampo('paciente_id', e.target.value)} disabled={!!editandoId}>
                 <option value="">Selecione o paciente...</option>
                 {pacientes.map(p => <option key={p.id} value={p.id}>{p.nome} — {p.cpf}</option>)}
               </SelectField>
             </div>
-            <Btn variant="secondary" icon={UserPlus} onClick={abrirNovoPaciente} className="shrink-0">Novo</Btn>
+            {!editandoId && <Btn variant="secondary" icon={UserPlus} onClick={abrirNovoPaciente} className="shrink-0">Novo</Btn>}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <SelectField label="Status" value={form.status} onChange={e => setCampo('status', e.target.value)}>
