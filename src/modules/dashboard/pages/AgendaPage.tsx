@@ -124,7 +124,7 @@ export function AgendaPage() {
     setForm(prev => {
       const updates: Partial<Form> = { procedimento_id: procId };
       if (proc) {
-        if (!prev.valor_cobrado) updates.valor_cobrado = proc.valor_padrao != null ? String(proc.valor_padrao) : '';
+        updates.valor_cobrado = proc.valor_padrao != null ? String(proc.valor_padrao) : '';
         if (prev.hora_inicio && proc.duracao) {
           const [h, m] = prev.hora_inicio.split(':').map(Number);
           if (!isNaN(h) && !isNaN(m)) {
