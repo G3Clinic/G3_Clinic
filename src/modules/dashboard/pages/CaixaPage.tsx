@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Landmark, ArrowUpCircle, ArrowDownCircle, Lock, DollarSign, Wallet, Unlock, Clock, Search, User, Users } from 'lucide-react';
 import { PageHeader, Card, Btn, StatsCard, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
-import { caixaLancamentosApi, caixaApi, usuariosApi, type APICaixaLancamento, type APIUsuario } from '../../../services/api';
+import { caixaLancamentosApi, caixaApi, usuariosApi, fechamentosApi, type APICaixaLancamento, type APIUsuario } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
 
 const PAGAMENTOS = ['Dinheiro', 'PIX', 'Cartão de Crédito', 'Cartão de Débito'];
@@ -82,17 +82,7 @@ export function CaixaPage() {
     if (!confirm('Gerar termo de fechamento e enviar para o aplicativo do médico? Isso criará um registro assinado digitalmente por você.')) return;
     try {
       const dataHoje = hojeISO();
-      // Chamar a API de geração
-      const token = localStorage.getItem('token');
-      const res = await fetch('http://127.0.0.1:8000/fechamentos/gerar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ medico_id, data_fechamento: dataHoje })
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Erro ao gerar fechamento');
-      }
+      await fechamentosApi.gerar(medico_id, dataHoje);
       alert('Fechamento gerado e enviado para aceite do médico!');
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Erro de conexão.');
@@ -137,7 +127,7 @@ export function CaixaPage() {
 
       {/* Status do turno de caixa */}
       {!isProfissional && (
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm ${turno.aberto ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm print:hidden ${turno.aberto ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
           <Clock size={16} />
           {turno.aberto ? (
             <span>Caixa <strong>ABERTO</strong> desde <strong>{horaBR(turno.data_abertura)}</strong> — abertura <strong>{turno.abertura_origem === 'automatico' ? 'automática' : 'manual'}</strong>.</span>
@@ -149,7 +139,7 @@ export function CaixaPage() {
 
       {/* Carrossel de Profissionais */}
       {!isProfissional && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm print:hidden">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
             <h3 className="font-bold text-slate-700 flex items-center gap-2">
               <User size={18} className="text-brand-primary" />
@@ -230,16 +220,16 @@ export function CaixaPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 print:grid-cols-4 gap-4 print:mb-6">
         <StatsCard icon={DollarSign} label="Total do Dia" value={`R$ ${totalDia.toFixed(2)}`} color="blue" />
         <StatsCard icon={ArrowUpCircle} label="Entradas (Dinheiro)" value={`R$ ${entradasDinheiro.toFixed(2)}`} color="green" />
         <StatsCard icon={ArrowUpCircle} label="Entradas (Cartão/PIX)" value={`R$ ${entradasCartaoPix.toFixed(2)}`} color="green" />
         <StatsCard icon={ArrowDownCircle} label={filtroProf ? "Repasses" : "Saídas / Despesas"} value={`R$ ${saidas.toFixed(2)}`} color="red" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <Card className="h-full">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 print:block">
+        <div className="lg:col-span-2 print:mb-8">
+          <Card className="h-full print:shadow-none print:border-none print:p-0">
             <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4"><Wallet size={18} className="text-brand-primary" />Lançamentos do Dia</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -265,8 +255,8 @@ export function CaixaPage() {
           </Card>
         </div>
 
-        <div className="lg:col-span-1">
-          <Card className="h-full bg-brand-light/30 border-brand-primary/20">
+        <div className="lg:col-span-1 print:break-inside-avoid">
+          <Card className="h-full bg-brand-light/30 border-brand-primary/20 print:bg-transparent print:border-gray-300 print:shadow-none">
             <h3 className="font-bold text-slate-800 mb-6 text-center">Resumo Fechamento</h3>
             <div className="space-y-4">
               {PAGAMENTOS.map(f => (

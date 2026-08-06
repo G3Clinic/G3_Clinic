@@ -404,6 +404,11 @@ export const caixaApi = {
     apiFetch<{ ok: boolean; data_fechamento: string; total_arrecadado: number; fechamento_origem: string; abertura_origem: string }>('/api/caixa/fechar', { method: 'POST', body: JSON.stringify({ origem }) }),
 };
 
+export const fechamentosApi = {
+  gerar: (medico_id: string, data_fechamento: string) =>
+    apiFetch<{ message: string; fechamento_id: string }>('/fechamentos/gerar', { method: 'POST', body: JSON.stringify({ medico_id, data_fechamento }) }),
+};
+
 // Recepção laboratorial
 export interface APIRecepcaoLab {
   id: string; paciente_id?: number | null; profissional_id?: string | null;
