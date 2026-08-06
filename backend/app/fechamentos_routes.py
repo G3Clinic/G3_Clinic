@@ -49,14 +49,13 @@ def gerar_fechamento(
         fechamento_id=fechamento.id,
         usuario_id=user.id,
         papel="RECEPCIONISTA",
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent")
+        ip_address=request.client.host if request.client else None
     )
     db.add(assinatura)
     
     # FIXME: Adicionar Itens baseados na lógica real de repasses (pular a lógica complexa agora, assumir total)
     # Por agora, para simular a prova de conceito:
-    total = sum([l.valor for l in lancamentos if "Repasse" in l.descricao])
+    total = sum([(l.valor or 0) for l in lancamentos if l.descricao and "Repasse" in l.descricao])
     fechamento.valor_total = total
     
     db.commit()
@@ -109,8 +108,7 @@ def confirmar_fechamento(
         fechamento_id=fechamento.id,
         usuario_id=user.id,
         papel="MEDICO",
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent")
+        ip_address=request.client.host if request.client else None
     )
     db.add(assinatura_medico)
     db.flush()
