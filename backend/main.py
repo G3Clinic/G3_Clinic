@@ -409,6 +409,38 @@ def _processar_repasse_medico(db: Session, user, ag_id, valor, nome_pac, forma_p
         db.add(saida)
         db.flush()
 
+def _processar_repasse_recepcao(db: Session, user, ag_id, valor, nome_pac, forma_pagamento):
+    """Verifica se a recepcionista possui repasse por consulta e lança SAÍDA no caixa do dia."""
+    ag = db.query(clinica_models.Agendamento).filter(clinica_models.Agendamento.id == ag_id).first()
+    if not ag or not ag.criado_por:
+        return
+    
+    rep = db.query(clinica_models.RepasseRecepcionista).filter(
+        clinica_models.RepasseRecepcionista.recepcionista_id == ag.criado_por
+    ).first()
+    if not rep or not rep.valor:
+        return
+        
+    tipo = rep.tipo or ""
+    repasse_final = 0
+    if "Percentual" in tipo:
+        repasse_final = (valor or 0) * (rep.valor / 100.0)
+    elif "por Consulta" in tipo and "Fixo" in tipo:
+        repasse_final = rep.valor
+        
+    if repasse_final > 0:
+        prof_recep = db.query(clinica_models.PerfilUsuario).filter(clinica_models.PerfilUsuario.id == ag.criado_por).first()
+        nome_recep = prof_recep.nome if prof_recep else "Recepção"
+        saida = clinica_models.CaixaLancamento(
+            empresa_id=user.empresa_id, unidade_id=ag.unidade_id, tipo="SAIDA",
+            descricao=f"Comissão Recepção - {nome_recep} ({nome_pac})", 
+            paciente_id=ag.paciente_id, profissional_id=ag.criado_por, valor=repasse_final,
+            forma_pagamento=forma_pagamento, data=date.today(), criado_por=user.id,
+        )
+        db.add(saida)
+        db.flush()
+
+
 
 # --- Odontograma: semear especialidades + intervenções padrão (idempotente) ---
 _ODONTO_SEED = [
@@ -530,6 +562,7 @@ def finalizar_atendimento(
                                     descricao=f"Atendimento pago - {nome_pac}", profissional_id=ag.profissional_id)
             lancamento_id = lanc.id
             _processar_repasse_medico(db, user, ag.id, valor, nome_pac, pago.forma_pagamento)
+            _processar_repasse_recepcao(db, user, ag.id, valor, nome_pac, pago.forma_pagamento)
             registrar_evento(db, user, "finalização", "recepcao", "agendamentos", ag.id,
                              f'Finalizou atendimento de "{nome_pac}" (pago) — R$ {valor:.2f} no caixa')
         else:
@@ -592,6 +625,7 @@ def baixar_recebimento(
     
     if rec.agendamento_id:
         _processar_repasse_medico(db, user, rec.agendamento_id, rec.valor, nome_pac, forma)
+        _processar_repasse_recepcao(db, user, rec.agendamento_id, rec.valor, nome_pac, forma)
         
     registrar_evento(db, user, "alteração", "caixa", "recebimentos", rec.id,
                      f'Baixa de pagamento — R$ {(rec.valor or 0):.2f} ({nome_pac})')

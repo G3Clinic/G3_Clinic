@@ -350,6 +350,7 @@ export interface APIAgendamento {
   forma_pagamento?: string | null;
   convenio_id?: number | null;
   valor_cobrado?: number | null;
+  criado_por?: string | null;
 }
 export const agendamentosApi = crudApi<APIAgendamento>('agendamentos');
 

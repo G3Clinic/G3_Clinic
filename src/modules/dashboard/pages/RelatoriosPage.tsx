@@ -127,18 +127,16 @@ export function RelatoriosPage() {
   // Para valores fixos (mensais), somamos proporcional ou o total se o filtro for maior que um mês (aqui simplificado).
   let totalComissaoRecep = 0;
   repassesRecep.forEach(r => {
+    const doRecep = finalizadosF.filter(a => a.criado_por === r.recepcionista_id);
+    
     if (r.tipo?.includes('Percentual')) {
-       // Acha todos os atendimentos do periodo e calcula a porcentagem do faturamento total
-       // Idealmente saberíamos quem agendou, mas como 'criado_por' não está em APIAgendamento (ou está escondido),
-       // vamos aplicar a comissão sobre o faturamento bruto apenas se a pessoa tiver vínculo.
-       // Se o dono não conseguir ver isso perfeitamente porque a api não retorna criado_por, faremos uma estimativa do DRE:
-       // Mas podemos filtrar os repasses pagos no mês. 
-       if (r.status === 'Pago' || r.status === 'Pendente') { // considera tudo do DRE
-         totalComissaoRecep += (fatBruto * (r.valor || 0)) / 100;
+       const faturadoRecep = doRecep.reduce((s, a) => s + (a.valor_cobrado || 0), 0);
+       if (r.status === 'Pago' || r.status === 'Pendente') {
+         totalComissaoRecep += (faturadoRecep * (r.valor || 0)) / 100;
        }
     } else if (r.tipo?.includes('por Consulta') && r.tipo?.includes('Fixo')) {
        if (r.status === 'Pago' || r.status === 'Pendente') {
-         totalComissaoRecep += finalizadosF.length * (r.valor || 0);
+         totalComissaoRecep += doRecep.length * (r.valor || 0);
        }
     } else {
        // Valor fixo mensal
