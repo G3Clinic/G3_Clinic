@@ -59,9 +59,9 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
   useEffect(() => {
     filiaisApi.listar()
       .then(todas => {
-        // Dono/administrador veem todas as filiais; demais, apenas as que
+        // Dono vê todas as filiais; demais, apenas as que
         // têm vínculo (user.filiais) — assim podem alternar sem novo login.
-        const acessiveis = (user?.is_dono || user?.role === 'administrador')
+        const acessiveis = user?.is_dono
           ? todas
           : todas.filter(f => (user?.filiais || []).some(uf => uf.unidade_id === f.id));
         setFiliais(acessiveis);
