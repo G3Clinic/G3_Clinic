@@ -91,3 +91,14 @@ class ConsultaResponse(ConsultaBase):
 
     class Config:
         from_attributes = True
+
+class FechamentoCaixaGerar(BaseModel):
+    medico_id: str
+    data_fechamento: str
+
+class FechamentoCaixaConfirmar(BaseModel):
+    senha: str
+
+class FechamentoCaixaContestar(BaseModel):
+    observacao: str
+

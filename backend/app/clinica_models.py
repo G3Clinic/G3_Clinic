@@ -18,7 +18,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, Float, Date, DateTime, JSON,
-    ForeignKey,
+    ForeignKey, func
 )
 
 from .database import Base
@@ -669,7 +669,55 @@ CRUD_MODELS = [
     (TabelaLaboratorio, "tabela_laboratorio", "financeiro"),
     (Laudo, "laudos", "recepcao"),
     (Notificacao, "notificacoes", "admin"),
-    (EventoAuditoria, "eventos_auditoria", "financeiro"),
     (ClinicaDado, "clinica_dados", "admin"),
     (CadernetaVacina, "caderneta_vacinas", "prontuario"),
 ]
+
+class FechamentoCaixa(Base, TenantMixin):
+    __tablename__ = "fechamentos_caixa"
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    medico_id = Column(String(36), nullable=False)
+    recepcionista_id = Column(String(36), nullable=False)
+    data_fechamento = Column(Date, nullable=False)
+    valor_total = Column(Float, default=0.0)
+    status = Column(String(20), default="PENDENTE")
+    observacao_contestacao = Column(Text, nullable=True)
+    hash_documento = Column(String(64), nullable=True)
+    pdf_path = Column(String(255), nullable=True)
+    
+    criado_em = Column(DateTime, default=func.now())
+    atualizado_em = Column(DateTime, default=func.now(), onupdate=func.now())
+
+class FechamentoCaixaItem(Base, TenantMixin):
+    __tablename__ = "fechamentos_caixa_itens"
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    fechamento_id = Column(String(36), ForeignKey("fechamentos_caixa.id"), nullable=False)
+    agendamento_id = Column(String(36), nullable=True)
+    caixa_lancamento_id = Column(String(36), nullable=True)
+    paciente_nome = Column(String(100), nullable=True)
+    valor_procedimento = Column(Float, default=0.0)
+    percentual_aplicado = Column(Float, nullable=True)
+    valor_repasse = Column(Float, default=0.0)
+
+class AssinaturaEletronica(Base, TenantMixin):
+    __tablename__ = "assinaturas_eletronicas"
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    fechamento_id = Column(String(36), ForeignKey("fechamentos_caixa.id"), nullable=False)
+    usuario_id = Column(String(36), nullable=False)
+    papel = Column(String(20), nullable=False) # RECEPCIONISTA ou MEDICO
+    timestamp = Column(DateTime, default=func.now())
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(Text, nullable=True)
+    hash_assinatura = Column(String(64), nullable=True)
+
+
+CRUD_MODELS.extend([
+    (EventoAuditoria, "eventos_auditoria", "financeiro"),
+    (FechamentoCaixa, "fechamentos_caixa", "financeiro"),
+    (FechamentoCaixaItem, "fechamentos_caixa_itens", "financeiro"),
+    (AssinaturaEletronica, "assinaturas_eletronicas", "financeiro"),
+])
+

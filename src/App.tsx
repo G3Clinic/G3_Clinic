@@ -11,6 +11,7 @@ import { RecepcaoPage } from './modules/dashboard/pages/RecepcaoPage';
 import { ProntuarioPage } from './modules/dashboard/pages/ProntuarioPage';
 import { OdontogramaPage } from './modules/dashboard/pages/OdontogramaPage';
 import { CaixaPage } from './modules/dashboard/pages/CaixaPage';
+import { FechamentosPage } from './modules/dashboard/pages/FechamentosPage';
 import { EstoquePage } from './modules/dashboard/pages/EstoquePage';
 import { RelatoriosPage } from './modules/dashboard/pages/RelatoriosPage';
 import { FinDashboardPage } from './modules/dashboard/pages/FinDashboardPage';
@@ -61,6 +62,7 @@ function App() {
           <Route path="prontuario" element={<ProntuarioPage />} />
           <Route path="odontograma" element={<OdontogramaPage />} />
           <Route path="caixa" element={<CaixaPage />} />
+          <Route path="fechamentos" element={<FechamentosPage />} />
           <Route path="estoque" element={<EstoquePage />} />
           <Route path="relatorios" element={<RelatoriosPage />} />
           <Route path="financeiro" element={<FinDashboardPage />} />

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import {
   Home, Users, Calendar, MonitorPlay, ClipboardList,
   Smile, DollarSign, Package, BarChart2, HeartPulse, Settings, LogOut, X, ChevronDown,
-  Landmark, Database
+  Landmark, Database, FileSignature
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -196,6 +196,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             {isCollapsed ? "•" : "Operacional"}
           </div>
           {temPermissao('caixa') && <NavItem icon={Landmark} label="Caixa do Dia" to="/dashboard/caixa" isCollapsed={isCollapsed} />}
+          {user?.role === 'profissional_saude' && !user?.is_dono && (
+            <NavItem icon={FileSignature} label="Meus Fechamentos" to="/dashboard/fechamentos" isCollapsed={isCollapsed} />
+          )}
           {temPermissao('estoque') && <NavItem icon={Package} label="Estoque" to="/dashboard/estoque" isCollapsed={isCollapsed} />}
           {temPermissao('relatorios') && <NavItem icon={BarChart2} label="Relatórios" to="/dashboard/relatorios" isCollapsed={isCollapsed} />}
 

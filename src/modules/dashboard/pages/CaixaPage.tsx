@@ -79,6 +79,28 @@ export function CaixaPage() {
       carregar();
     } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao fechar o caixa.'); }
   };
+  
+  const fecharCaixaProfissional = async (medico_id: string) => {
+    if (!confirm('Gerar termo de fechamento e enviar para o aplicativo do médico? Isso criará um registro assinado digitalmente por você.')) return;
+    try {
+      const dataHoje = hojeISO();
+      // Chamar a API de geração
+      const token = localStorage.getItem('token');
+      const res = await fetch('http://127.0.0.1:8000/fechamentos/gerar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ medico_id, data_fechamento: dataHoje })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Erro ao gerar fechamento');
+      }
+      alert('Fechamento gerado e enviado para aceite do médico!');
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Erro de conexão.');
+    }
+  };
+
   const horaBR = (iso?: string) => iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
   
   const handlePrint = () => {
@@ -204,6 +226,12 @@ export function CaixaPage() {
                         <span className="text-white/80 font-medium">Taxa da Clínica:</span>
                         <span className="font-bold">R$ {(entradasTotais - saidas).toFixed(2)}</span>
                       </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); fecharCaixaProfissional(p.id); }}
+                        className="mt-2 text-xs bg-white/20 hover:bg-white/30 text-white py-1 px-2 rounded font-medium border border-white/20 transition-colors"
+                      >
+                        Gerar Fechamento do Profissional
+                      </button>
                     </div>
                   )}
                 </div>
