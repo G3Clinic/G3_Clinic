@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Landmark, ArrowUpCircle, ArrowDownCircle, Lock, DollarSign, Wallet, Unlock, Clock, TrendingUp, Search, User } from 'lucide-react';
+import { Landmark, ArrowUpCircle, ArrowDownCircle, Lock, DollarSign, Wallet, Unlock, Clock, TrendingUp, Search, User, Users } from 'lucide-react';
 import { PageHeader, Card, Btn, StatsCard, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import { caixaLancamentosApi, caixaApi, usuariosApi, type APICaixaLancamento, type APIUsuario } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
