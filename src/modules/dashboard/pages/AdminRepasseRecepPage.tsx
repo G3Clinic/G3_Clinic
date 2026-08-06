@@ -3,7 +3,7 @@ import { DollarSign, Plus, Edit2, Trash2, Save } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import { repasseRecepApi, usuariosApi, type APIRepasseRecep, type APIUsuario } from '../../../services/api';
 
-const TIPOS = ['Percentual por Consulta', 'Valor Fixo Mensal'];
+const TIPOS = ['Percentual por Consulta', 'Valor Fixo Mensal', 'Valor Fixo por Consulta'];
 
 export function AdminRepasseRecepPage() {
   const [lista, setLista] = useState<APIRepasseRecep[]>([]);

@@ -136,6 +136,10 @@ export function RelatoriosPage() {
        if (r.status === 'Pago' || r.status === 'Pendente') { // considera tudo do DRE
          totalComissaoRecep += (fatBruto * (r.valor || 0)) / 100;
        }
+    } else if (r.tipo?.includes('por Consulta') && r.tipo?.includes('Fixo')) {
+       if (r.status === 'Pago' || r.status === 'Pendente') {
+         totalComissaoRecep += finalizadosF.length * (r.valor || 0);
+       }
     } else {
        // Valor fixo mensal
        totalComissaoRecep += r.valor || 0;
