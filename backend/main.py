@@ -358,12 +358,19 @@ def _lancar_no_caixa(db: Session, user, *, valor, descricao, paciente_id=None,
 def _valor_do_agendamento(db: Session, ag, empresa_id: int) -> float:
     valor = ag.valor_cobrado
     if not valor and ag.procedimento_id:
-        proc = db.query(clinica_models.ProcedimentoOdontologico).filter(
-            clinica_models.ProcedimentoOdontologico.id == ag.procedimento_id,
-            clinica_models.ProcedimentoOdontologico.empresa_id == empresa_id,
+        proc = db.query(clinica_models.Procedimento).filter(
+            clinica_models.Procedimento.id == ag.procedimento_id,
+            clinica_models.Procedimento.empresa_id == empresa_id,
         ).first()
         if proc:
-            valor = proc.valor_base
+            valor = proc.valor_padrao
+        else:
+            proc_odonto = db.query(clinica_models.OdontoProcedimento).filter(
+                clinica_models.OdontoProcedimento.id == ag.procedimento_id,
+                clinica_models.OdontoProcedimento.empresa_id == empresa_id,
+            ).first()
+            if proc_odonto:
+                valor = proc_odonto.valor_base
     return float(valor or 0)
 
 
@@ -375,7 +382,7 @@ def _processar_repasse_medico(db: Session, user, ag_id, valor, nome_pac, forma_p
         
     proc = db.query(clinica_models.Procedimento).filter(clinica_models.Procedimento.id == ag.procedimento_id).first()
     if not proc:
-        proc = db.query(clinica_models.ProcedimentoOdontologico).filter(clinica_models.ProcedimentoOdontologico.id == ag.procedimento_id).first()
+        proc = db.query(clinica_models.OdontoProcedimento).filter(clinica_models.OdontoProcedimento.id == ag.procedimento_id).first()
         
     if not proc:
         return
@@ -390,7 +397,7 @@ def _processar_repasse_medico(db: Session, user, ag_id, valor, nome_pac, forma_p
         repasse_final = val_rep
         
     if repasse_final > 0:
-        prof = db.query(clinica_models.Usuario).filter(clinica_models.Usuario.id == ag.profissional_id).first()
+        prof = db.query(clinica_models.PerfilUsuario).filter(clinica_models.PerfilUsuario.id == ag.profissional_id).first()
         nome_prof = prof.nome if prof else "Profissional"
         
         saida = clinica_models.CaixaLancamento(
