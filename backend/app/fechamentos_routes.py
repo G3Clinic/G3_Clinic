@@ -24,7 +24,7 @@ def gerar_fechamento(
     lancamentos = db.query(cm.CaixaLancamento).filter(
         cm.CaixaLancamento.empresa_id == user.empresa_id,
         cm.CaixaLancamento.tipo == "SAIDA",
-        cm.CaixaLancamento.data_lancamento == datetime.strptime(dados.data_fechamento, "%Y-%m-%d").date(),
+        cm.CaixaLancamento.data == datetime.strptime(dados.data_fechamento, "%Y-%m-%d").date(),
         # Aqui assumimos que a descrição contém o nome do médico, ou idealmente teríamos uma FK para médico no CaixaLancamento.
         # Vamos assumir que a descrição do caixa já identifica que é um repasse.
         # Para simplificar e devido à falta de FK direta no modelo CaixaLancamento,
