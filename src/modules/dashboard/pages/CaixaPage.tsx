@@ -163,20 +163,23 @@ export function CaixaPage() {
             </div>
           </div>
           
-          <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
-            {/* Card "Todos" */}
+          <div className="flex gap-4 overflow-x-auto pb-6 pt-4 px-2 snap-x hide-scrollbar scroll-smooth">
+            {/* Botão TODOS */}
             <div 
               onClick={() => setFiltroProf('')}
-              className={`flex flex-col items-center justify-center p-3 rounded-xl min-w-[100px] cursor-pointer transition-all ${
+              className={`group flex flex-col items-center justify-center p-4 rounded-2xl min-w-[110px] cursor-pointer transition-all duration-300 snap-start relative overflow-hidden ${
                 !filtroProf 
-                  ? 'bg-brand-primary text-white shadow-md ring-2 ring-brand-primary/20 ring-offset-2' 
-                  : 'bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200'
+                  ? 'bg-gradient-to-br from-brand-primary to-indigo-600 text-white shadow-xl shadow-brand-primary/30 scale-105 ring-2 ring-white ring-offset-2 ring-offset-slate-50' 
+                  : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-100 hover:border-slate-300 hover:shadow-lg hover:-translate-y-1'
               }`}
             >
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 ${!filtroProf ? 'bg-white/20' : 'bg-gray-200'}`}>
-                <User size={20} className={!filtroProf ? 'text-white' : 'text-gray-400'} />
+              {!filtroProf && (
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
+              )}
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-3 relative z-10 transition-transform duration-300 group-hover:scale-110 ${!filtroProf ? 'bg-white/20 backdrop-blur-sm text-white shadow-inner' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200 group-hover:text-brand-primary'}`}>
+                <Users size={24} strokeWidth={!filtroProf ? 2.5 : 2} />
               </div>
-              <span className="text-xs font-bold text-center">Todos</span>
+              <span className="text-sm font-bold text-center tracking-wide relative z-10">Todos</span>
             </div>
 
             {/* Cards dos Profissionais */}
@@ -184,26 +187,34 @@ export function CaixaPage() {
               <div 
                 key={p.id}
                 onClick={() => setFiltroProf(p.id)}
-                className={`flex flex-col items-center justify-center p-3 rounded-xl min-w-[100px] max-w-[110px] cursor-pointer transition-all ${
+                className={`group flex flex-col items-center justify-center p-4 rounded-2xl min-w-[110px] max-w-[120px] cursor-pointer transition-all duration-300 snap-start relative overflow-hidden ${
                   filtroProf === p.id 
-                    ? 'bg-brand-primary text-white shadow-md ring-2 ring-brand-primary/20 ring-offset-2' 
-                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
+                    ? 'bg-gradient-to-br from-brand-primary to-indigo-600 text-white shadow-xl shadow-brand-primary/30 scale-105 ring-2 ring-white ring-offset-2 ring-offset-slate-50' 
+                    : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100 hover:border-slate-300 hover:shadow-lg hover:-translate-y-1'
                 }`}
               >
-                {/* Fallback de Avatar */}
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-2 text-lg font-bold ${
-                  filtroProf === p.id ? 'bg-white text-brand-primary' : 'bg-brand-primary/10 text-brand-primary'
+                {filtroProf === p.id && (
+                  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
+                )}
+                {/* Fallback de Avatar Premium */}
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-3 text-xl font-black relative z-10 transition-transform duration-300 group-hover:scale-110 ${
+                  filtroProf === p.id 
+                    ? 'bg-white/20 backdrop-blur-sm text-white shadow-inner' 
+                    : 'bg-gradient-to-tr from-slate-100 to-slate-200 text-slate-500 group-hover:from-indigo-50 group-hover:to-brand-50 group-hover:text-brand-primary shadow-sm'
                 }`}>
                   {p.nome.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-xs font-medium text-center truncate w-full" title={p.nome}>
+                <span className="text-sm font-semibold text-center truncate w-full relative z-10" title={p.nome}>
                   {p.nome.split(' ')[0]}
                 </span>
               </div>
             ))}
             
             {profissionaisFiltrados.length === 0 && (
-              <div className="text-sm text-gray-400 p-4 w-full text-center">Nenhum profissional encontrado.</div>
+              <div className="flex flex-col items-center justify-center w-full py-8 text-slate-400">
+                <Users size={32} className="mb-2 opacity-50" />
+                <span className="text-sm font-medium">Nenhum profissional encontrado.</span>
+              </div>
             )}
           </div>
         </div>
