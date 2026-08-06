@@ -19,6 +19,9 @@ export function RecepcaoPage() {
   const { user } = useAuth();
   
   const hasProntuario = user?.is_dono || user?.role === 'administrador' || user?.permissoes?.some(p => p.modulo === 'prontuario');
+  // Profissional de saúde (não dono/admin) só pode ver os próprios pacientes na fila —
+  // recepcionista/admin/dono continuam vendo todos, pois coordenam a agenda de todos os médicos.
+  const restritoAoProprioProfissional = user?.role === 'profissional_saude' && !user?.is_dono;
 
   const [dataFiltro, setDataFiltro] = useState(new Date().toISOString().slice(0, 10));
   const [ags, setAgs] = useState<APIAgendamento[]>([]);
@@ -65,6 +68,7 @@ export function RecepcaoPage() {
   const nomeConv = (id?: number | null) => convenios.find(c => c.id === id)?.nome || 'Particular';
 
   const doDia = ags.filter(a => a.data_agendamento === dataFiltro)
+    .filter(a => !restritoAoProprioProfissional || a.profissional_id === user?.id)
     .sort((a, b) => (a.hora_inicio || '').localeCompare(b.hora_inicio || ''));
 
   const cont = (st: string[]) => doDia.filter(a => st.includes(a.status || 'Agendado')).length;
