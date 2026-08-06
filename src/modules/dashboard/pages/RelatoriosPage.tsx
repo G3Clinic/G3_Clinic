@@ -127,7 +127,8 @@ export function RelatoriosPage() {
   // Para valores fixos (mensais), somamos proporcional ou o total se o filtro for maior que um mês (aqui simplificado).
   let totalComissaoRecep = 0;
   repassesRecep.forEach(r => {
-    const doRecep = finalizadosF.filter(a => a.criado_por === r.recepcionista_id);
+    // Caso criado_por seja nulo (legado) ou corresponda à recepcionista
+    const doRecep = finalizadosF.filter(a => !a.criado_por || a.criado_por === r.recepcionista_id);
     
     if (r.tipo?.includes('Percentual')) {
        const faturadoRecep = doRecep.reduce((s, a) => s + (a.valor_cobrado || 0), 0);
@@ -178,7 +179,15 @@ export function RelatoriosPage() {
       </div>
 
       {/* Filtros Completos */}
-      <Card padding={false} className="bg-white border-gray-200 shadow-sm">
+      <Card padding={false} className="bg-white border-gray-200 shadow-sm mb-4">
+        <div className="p-4 border-b border-gray-100 flex gap-2">
+          <Btn variant="secondary" onClick={() => { setDe(hojeISO()); setAte(hojeISO()); }}>Hoje</Btn>
+          <Btn variant="secondary" onClick={() => { 
+            const d = new Date(); d.setDate(d.getDate() - 7); 
+            setDe(d.toISOString().slice(0, 10)); setAte(hojeISO()); 
+          }}>7 Dias</Btn>
+          <Btn variant="secondary" onClick={() => { setDe(primeiroDiaMes()); setAte(hojeISO()); }}>Mês Atual</Btn>
+        </div>
         <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 items-end">
           <InputField label="De" type="date" value={de} onChange={e => setDe(e.target.value)} />
           <InputField label="Até" type="date" value={ate} onChange={e => setAte(e.target.value)} />
