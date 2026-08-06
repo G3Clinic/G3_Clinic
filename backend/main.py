@@ -343,11 +343,11 @@ def _turno_caixa_aberto(db: Session, empresa_id: int):
 
 
 def _lancar_no_caixa(db: Session, user, *, valor, descricao, paciente_id=None,
-                     unidade_id=None, forma_pagamento=None):
+                     unidade_id=None, forma_pagamento=None, profissional_id=None):
     """Cria uma ENTRADA no caixa do dia, vinculando ao turno aberto (se houver)."""
     lanc = clinica_models.CaixaLancamento(
         empresa_id=user.empresa_id, unidade_id=unidade_id, tipo="ENTRADA",
-        descricao=descricao, paciente_id=paciente_id, valor=valor or 0,
+        descricao=descricao, paciente_id=paciente_id, profissional_id=profissional_id, valor=valor or 0,
         forma_pagamento=forma_pagamento or None, data=date.today(), criado_por=user.id,
     )
     db.add(lanc)
@@ -403,7 +403,7 @@ def _processar_repasse_medico(db: Session, user, ag_id, valor, nome_pac, forma_p
         saida = clinica_models.CaixaLancamento(
             empresa_id=user.empresa_id, unidade_id=ag.unidade_id, tipo="SAIDA",
             descricao=f"Repasse Profissional - {nome_prof} ({nome_pac})", 
-            paciente_id=ag.paciente_id, valor=repasse_final,
+            paciente_id=ag.paciente_id, profissional_id=ag.profissional_id, valor=repasse_final,
             forma_pagamento=forma_pagamento, data=date.today(), criado_por=user.id,
         )
         db.add(saida)
@@ -527,7 +527,7 @@ def finalizar_atendimento(
         if pago:
             lanc = _lancar_no_caixa(db, user, valor=valor, unidade_id=ag.unidade_id,
                                     paciente_id=ag.paciente_id, forma_pagamento=pago.forma_pagamento,
-                                    descricao=f"Atendimento pago — {nome_pac}")
+                                    descricao=f"Atendimento pago - {nome_pac}", profissional_id=ag.profissional_id)
             lancamento_id = lanc.id
             _processar_repasse_medico(db, user, ag.id, valor, nome_pac, pago.forma_pagamento)
             registrar_evento(db, user, "finalização", "recepcao", "agendamentos", ag.id,
@@ -584,9 +584,11 @@ def baixar_recebimento(
     ).first() if rec.paciente_id else None
     nome_pac = pac.nome if pac else (rec.descricao or "Recebimento")
 
+    ag = db.query(clinica_models.Agendamento).filter(clinica_models.Agendamento.id == rec.agendamento_id).first() if rec.agendamento_id else None
+    
     lanc = _lancar_no_caixa(db, user, valor=rec.valor, unidade_id=rec.unidade_id,
                             paciente_id=rec.paciente_id, forma_pagamento=forma,
-                            descricao=f"Pagamento — {nome_pac}")
+                            descricao=f"Pagamento — {nome_pac}", profissional_id=ag.profissional_id if ag else None)
     
     if rec.agendamento_id:
         _processar_repasse_medico(db, user, rec.agendamento_id, rec.valor, nome_pac, forma)

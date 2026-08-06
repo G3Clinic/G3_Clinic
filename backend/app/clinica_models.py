@@ -347,6 +347,7 @@ class CaixaLancamento(Base, TenantMixin):
     tipo = Column(String)  # ENTRADA / SAIDA
     descricao = Column(String, nullable=True)
     paciente_id = Column(Integer, nullable=True)
+    profissional_id = Column(String, nullable=True)
     valor = Column(Float)
     forma_pagamento = Column(String, nullable=True)
     data = Column(Date, nullable=True)
