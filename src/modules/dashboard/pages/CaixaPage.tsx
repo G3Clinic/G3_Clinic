@@ -23,7 +23,6 @@ export function CaixaPage() {
   const [buscaProf, setBuscaProf] = useState('');
   
   const isProfissional = user?.role === 'profissional_saude' && !user?.is_dono;
-  const [filtroCaixa, setFiltroCaixa] = useState(isProfissional ? '' : user?.id || '');
   const [filtroProf, setFiltroProf] = useState(isProfissional ? user?.id || '' : '');
 
   const carregar = useCallback(() => {
@@ -42,9 +41,8 @@ export function CaixaPage() {
 
   const doDia = lancamentos.filter(l => {
     const isHoje = (l.data || (l.criado_em || '').slice(0, 10)) === hojeISO();
-    const matchCaixa = !filtroCaixa || l.criado_por === filtroCaixa;
     const matchProf = !filtroProf || l.profissional_id === filtroProf;
-    return isHoje && matchCaixa && matchProf;
+    return isHoje && matchProf;
   });
   const somaForma = (formas: string[], t: 'ENTRADA' | 'SAIDA' = 'ENTRADA') =>
     doDia.filter(l => l.tipo === t && formas.includes(l.forma_pagamento || '')).reduce((s, l) => s + (l.valor || 0), 0);
@@ -114,19 +112,6 @@ export function CaixaPage() {
       <div className="print:hidden">
         <PageHeader icon={Landmark} title={isProfissional ? "Meu Caixa" : "Caixa do Dia"} subtitle="Controle de fluxo de caixa, pagamentos e recebimentos diários">
           <div className="flex gap-2 items-center flex-wrap justify-end">
-            {(user?.role === 'administrador' || user?.is_dono) && (
-              <select 
-                value={filtroCaixa} 
-                onChange={e => setFiltroCaixa(e.target.value)}
-                className="px-3 py-2 text-sm rounded-xl border border-gray-200 bg-white"
-              >
-                <option value="">Todos os Caixas</option>
-                {usuarios.map(u => (
-                  <option key={u.id} value={u.id}>{u.nome}</option>
-                ))}
-              </select>
-            )}
-
             <Btn variant="secondary" onClick={handlePrint}>Imprimir</Btn>
             
             {!isProfissional && (
@@ -145,9 +130,6 @@ export function CaixaPage() {
       <div className="hidden print:block text-center mb-8">
         <h1 className="text-2xl font-bold">Fechamento de Caixa</h1>
         <p className="text-slate-500">Data: {new Date().toLocaleDateString('pt-BR')}</p>
-        {(user?.role === 'administrador' || user?.is_dono) && filtroCaixa && (
-          <p className="text-sm text-slate-500">Operador Caixa: {usuarios.find(u => u.id === filtroCaixa)?.nome}</p>
-        )}
         {filtroProf && (
           <p className="text-sm font-bold text-slate-700">Profissional: {profissionais.find(u => u.id === filtroProf)?.nome || user?.nome}</p>
         )}

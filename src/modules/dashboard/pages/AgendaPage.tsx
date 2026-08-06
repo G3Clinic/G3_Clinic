@@ -39,7 +39,7 @@ const minutos = (t?: string | null) => {
 // Posiciona os agendamentos de um dia em "faixas" (lanes) para que atendimentos
 // sobrepostos fiquem lado a lado, e cada um vire uma barra vertical contínua.
 type BarraAg<T> = { a: T; ini: number; fim: number; lane: number; lanes: number };
-function layoutDia<T extends { hora_inicio?: string | null; hora_fim?: string | null }>(appts: T[]): BarraAg<T>[] {
+function layoutDia<T extends { hora_inicio?: string | null; hora_fim?: string | null }>(appts: T[], getOrdem?: (a: T) => number): BarraAg<T>[] {
   const items = appts.map(a => {
     const ini = minutos(a.hora_inicio);
     let fim = a.hora_fim ? minutos(a.hora_fim) : ini + 60;
@@ -58,6 +58,9 @@ function layoutDia<T extends { hora_inicio?: string | null; hora_fim?: string | 
       cluster.push(items[j]);
       clusterFim = Math.max(clusterFim, items[j].fim);
       j++;
+    }
+    if (getOrdem) {
+      cluster.sort((x, y) => getOrdem(x.a) - getOrdem(y.a) || x.ini - y.ini);
     }
     // distribui em lanes dentro do cluster
     const laneFim: number[] = [];
@@ -250,7 +253,47 @@ export function AgendaPage() {
 
   const abrirNovo = (dataISO?: string, hora?: string) => {
     setEditandoId(null);
-    setForm({ ...FORM_VAZIO, data_agendamento: dataISO || fmtISO(new Date()), hora_inicio: hora || '' });
+    let start = hora || '';
+    let end = '';
+    
+    if (dataISO && hora) {
+      const appts = agendamentos.filter(a => a.data_agendamento === dataISO && (filtroSala === 'all' || a.sala_id === filtroSala) && !['Cancelado', 'Falta'].includes(a.status || ''));
+      const toMin = (h?: string | null) => {
+        if (!h) return 0;
+        const [hh, mm] = h.split(':').map(Number);
+        return (hh || 0) * 60 + (mm || 0);
+      };
+      const fmtMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      
+      const blockStart = toMin(hora);
+      const blockEnd = blockStart + 60;
+      
+      const overlaps = appts.map(a => ({
+        i: Math.max(blockStart, toMin(a.hora_inicio)),
+        f: Math.min(blockEnd, a.hora_fim ? toMin(a.hora_fim) : toMin(a.hora_inicio) + 30)
+      })).filter(x => x.i < x.f).sort((a, b) => a.i - b.i);
+      
+      if (overlaps.length > 0) {
+        let gaps: {i: number, f: number}[] = [];
+        let curr = blockStart;
+        for (const o of overlaps) {
+          if (o.i > curr) gaps.push({i: curr, f: o.i});
+          curr = Math.max(curr, o.f);
+        }
+        if (curr < blockEnd) gaps.push({i: curr, f: blockEnd});
+        
+        if (gaps.length > 0) {
+          gaps.sort((a, b) => (b.f - b.i) - (a.f - a.i));
+          start = fmtMin(gaps[0].i);
+          end = fmtMin(gaps[0].f);
+        } else {
+          start = hora;
+          end = fmtMin(blockEnd);
+        }
+      }
+    }
+    
+    setForm({ ...FORM_VAZIO, data_agendamento: dataISO || fmtISO(new Date()), hora_inicio: start, hora_fim: end, sala_id: filtroSala !== 'all' ? filtroSala : '' });
     setErro(''); setModal(true);
   };
   const abrirEdicao = (a: APIAgendamento) => {
@@ -452,7 +495,11 @@ export function AgendaPage() {
                     const N = diasDaSemana.length;
                     const colW = 100 / N;
                     const totalH = HORARIOS.length * ROW_H;
-                    return layoutDia(appts).map(({ a: ag, ini, fim, lane, lanes }) => {
+                    const getOrdemSala = (a: APIAgendamento) => {
+                      const idx = salas.findIndex(s => s.id === a.sala_id);
+                      return idx >= 0 ? idx : 999;
+                    };
+                    return layoutDia(appts, getOrdemSala).map(({ a: ag, ini, fim, lane, lanes }) => {
                       const top = Math.max(0, (ini / 60 - PRIMEIRA_HORA) * ROW_H);
                       const altura = Math.min((fim - ini) / 60 * ROW_H, totalH - top);
                       const left = di * colW + (lane / lanes) * colW;
