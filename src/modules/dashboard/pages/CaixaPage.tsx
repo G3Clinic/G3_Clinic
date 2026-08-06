@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Landmark, ArrowUpCircle, ArrowDownCircle, Lock, DollarSign, Wallet, Unlock, Clock, TrendingUp, Search, User, Users } from 'lucide-react';
+import { Landmark, ArrowUpCircle, ArrowDownCircle, Lock, DollarSign, Wallet, Unlock, Clock, Search, User, Users } from 'lucide-react';
 import { PageHeader, Card, Btn, StatsCard, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import { caixaLancamentosApi, caixaApi, usuariosApi, type APICaixaLancamento, type APIUsuario } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -164,51 +164,51 @@ export function CaixaPage() {
           </div>
           
           <div className="flex gap-4 overflow-x-auto pb-6 pt-4 px-2 snap-x hide-scrollbar scroll-smooth">
-            {/* Botão TODOS */}
-            <div 
-              onClick={() => setFiltroProf('')}
-              className={`group flex flex-col items-center justify-center p-4 rounded-2xl min-w-[110px] cursor-pointer transition-all duration-300 snap-start relative overflow-hidden ${
-                !filtroProf 
-                  ? 'bg-gradient-to-br from-brand-primary to-indigo-600 text-white shadow-xl shadow-brand-primary/30 scale-105 ring-2 ring-white ring-offset-2 ring-offset-slate-50' 
-                  : 'bg-white text-slate-500 hover:bg-slate-50 border border-slate-100 hover:border-slate-300 hover:shadow-lg hover:-translate-y-1'
-              }`}
-            >
-              {!filtroProf && (
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
-              )}
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-3 relative z-10 transition-transform duration-300 group-hover:scale-110 ${!filtroProf ? 'bg-white/20 backdrop-blur-sm text-white shadow-inner' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200 group-hover:text-brand-primary'}`}>
-                <Users size={24} strokeWidth={!filtroProf ? 2.5 : 2} />
-              </div>
-              <span className="text-sm font-bold text-center tracking-wide relative z-10">Todos</span>
-            </div>
-
             {/* Cards dos Profissionais */}
-            {profissionaisFiltrados.map(p => (
+            {profissionaisFiltrados.map(p => {
+              const isSelected = filtroProf === p.id;
+              return (
               <div 
                 key={p.id}
-                onClick={() => setFiltroProf(p.id)}
-                className={`group flex flex-col items-center justify-center p-4 rounded-2xl min-w-[110px] max-w-[120px] cursor-pointer transition-all duration-300 snap-start relative overflow-hidden ${
-                  filtroProf === p.id 
-                    ? 'bg-gradient-to-br from-brand-primary to-indigo-600 text-white shadow-xl shadow-brand-primary/30 scale-105 ring-2 ring-white ring-offset-2 ring-offset-slate-50' 
-                    : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-100 hover:border-slate-300 hover:shadow-lg hover:-translate-y-1'
+                onClick={() => setFiltroProf(isSelected ? '' : p.id)}
+                className={`group flex items-center p-4 rounded-2xl cursor-pointer transition-all duration-300 snap-start relative overflow-hidden ${
+                  isSelected 
+                    ? 'flex-row gap-4 min-w-[280px] w-auto bg-gradient-to-br from-brand-primary to-indigo-600 text-white shadow-xl shadow-brand-primary/30 scale-105 ring-2 ring-white ring-offset-2 ring-offset-slate-50' 
+                    : 'flex-col justify-center min-w-[110px] max-w-[120px] bg-white text-slate-600 hover:bg-slate-50 border border-slate-100 hover:border-slate-300 hover:shadow-lg hover:-translate-y-1'
                 }`}
               >
-                {filtroProf === p.id && (
+                {isSelected && (
                   <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
                 )}
-                {/* Fallback de Avatar Premium */}
-                <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-3 text-xl font-black relative z-10 transition-transform duration-300 group-hover:scale-110 ${
-                  filtroProf === p.id 
-                    ? 'bg-white/20 backdrop-blur-sm text-white shadow-inner' 
-                    : 'bg-gradient-to-tr from-slate-100 to-slate-200 text-slate-500 group-hover:from-indigo-50 group-hover:to-brand-50 group-hover:text-brand-primary shadow-sm'
+                {/* Avatar */}
+                <div className={`flex-shrink-0 rounded-full flex items-center justify-center text-xl font-black relative z-10 transition-transform duration-300 group-hover:scale-110 ${
+                  isSelected 
+                    ? 'w-16 h-16 bg-white/20 backdrop-blur-sm text-white shadow-inner' 
+                    : 'w-14 h-14 mb-3 bg-gradient-to-tr from-slate-100 to-slate-200 text-slate-500 group-hover:from-indigo-50 group-hover:to-brand-50 group-hover:text-brand-primary shadow-sm'
                 }`}>
                   {p.nome.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-sm font-semibold text-center truncate w-full relative z-10" title={p.nome}>
-                  {p.nome.split(' ')[0]}
-                </span>
+
+                <div className="flex flex-col relative z-10 w-full overflow-hidden">
+                  <span className={`font-semibold truncate w-full ${isSelected ? 'text-lg text-white mb-2' : 'text-sm text-center'}`} title={p.nome}>
+                    {isSelected ? p.nome : p.nome.split(' ')[0]}
+                  </span>
+                  
+                  {isSelected && (
+                    <div className="flex flex-col gap-1 mt-1 border-t border-white/20 pt-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-white/80 font-medium">Repasse (Médico):</span>
+                        <span className="font-bold">R$ {saidas.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-white/80 font-medium">Taxa da Clínica:</span>
+                        <span className="font-bold">R$ {(entradasTotais - saidas).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            ))}
+            )})}
             
             {profissionaisFiltrados.length === 0 && (
               <div className="flex flex-col items-center justify-center w-full py-8 text-slate-400">
@@ -216,26 +216,6 @@ export function CaixaPage() {
                 <span className="text-sm font-medium">Nenhum profissional encontrado.</span>
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Se tiver filtrado por um profissional (ou se for o próprio), mostrar a Taxa da Clínica destacada */}
-      {filtroProf && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-4 rounded-xl flex items-center justify-between shadow-sm flex-wrap gap-4">
-          <div>
-            <h3 className="font-bold text-blue-900 flex items-center gap-2"><TrendingUp size={18} /> Resumo do Profissional</h3>
-            <p className="text-sm text-blue-700 mt-1">Valores referentes às consultas realizadas por <strong>{profissionais.find(p => p.id === filtroProf)?.nome || user?.nome}</strong> hoje.</p>
-          </div>
-          <div className="flex gap-6 text-right">
-            <div>
-              <p className="text-xs font-bold text-blue-500 uppercase tracking-widest">Repasse (Médico)</p>
-              <p className="text-2xl font-black text-blue-700">R$ {saidas.toFixed(2)}</p>
-            </div>
-            <div className="border-l border-blue-200 pl-6">
-              <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest">Taxa da Clínica</p>
-              <p className="text-2xl font-black text-indigo-700">R$ {(entradasTotais - saidas).toFixed(2)}</p>
-            </div>
           </div>
         </div>
       )}
