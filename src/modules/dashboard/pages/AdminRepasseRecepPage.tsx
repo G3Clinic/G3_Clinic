@@ -75,13 +75,19 @@ export function AdminRepasseRecepPage() {
                 : lista.length === 0 ? <tr><td colSpan={6} className="text-center py-8 text-slate-500">Nenhum repasse cadastrado.</td></tr>
                 : lista.map(r => (
                   <tr key={r.id} className="hover:bg-slate-50 group">
-                    <td className="px-4 py-3 font-medium text-slate-800">{nomeRecep(r.recepcionista_id)}</td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">{r.tipo}</td>
+                    <td className="px-4 py-3 text-slate-700">{nomeRecep(r.recepcionista_id)}</td>
+                    <td className="px-4 py-3 text-slate-500">{r.tipo}</td>
                     <td className="px-4 py-3 font-bold text-slate-700">{r.tipo?.includes('Percentual') ? `${r.valor}%` : `R$ ${(r.valor ?? 0).toFixed(2)}`}</td>
-                    <td className="px-4 py-3 text-slate-500">{r.referencia || '—'}</td>
-                    <td className="px-4 py-3"><Badge color={r.status === 'Pago' ? 'green' : 'yellow'}>{r.status}</Badge></td>
+                    <td className="px-4 py-3 text-slate-500">{r.referencia || '-'}</td>
+                    <td className="px-4 py-3">
+                      {r.tipo?.includes('por Consulta') ? (
+                        <Badge color="blue">Ativo</Badge>
+                      ) : (
+                        <Badge color={r.status === 'Pago' ? 'green' : 'yellow'}>{r.status}</Badge>
+                      )}
+                    </td>
                     <td className="px-4 py-3"><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {r.status !== 'Pago' && <button onClick={() => marcarPago(r)} className="px-2 py-1 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100">✓ Marcar Pago</button>}
+                      {(!r.tipo?.includes('por Consulta') && r.status !== 'Pago') && <button onClick={() => marcarPago(r)} className="px-2 py-1 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100">✓ Marcar Pago</button>}
                       <button onClick={() => abrirEdit(r)} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-light rounded-lg"><Edit2 size={14} /></button>
                       <button onClick={() => excluir(r)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
                     </div></td>
@@ -103,7 +109,9 @@ export function AdminRepasseRecepPage() {
           </SelectField>
           <InputField label="Valor (% ou R$)" type="number" step="0.01" placeholder="Ex: 5 ou 800.00" value={valor} onChange={e => setValor(e.target.value)} />
           <InputField label="Referência (Mês/Ano)" placeholder="Ex: Julho/2025" value={referencia} onChange={e => setReferencia(e.target.value)} />
-          <SelectField label="Status" value={status} onChange={e => setStatus(e.target.value)}><option>Pendente</option><option>Pago</option></SelectField>
+          {!tipo?.includes('por Consulta') && (
+            <SelectField label="Status" value={status} onChange={e => setStatus(e.target.value)}><option>Pendente</option><option>Pago</option></SelectField>
+          )}
           {erro && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{erro}</div>}
         </div>
         <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100">
