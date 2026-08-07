@@ -39,6 +39,7 @@ MODULOS_PADRAO = [
     ("recepcao", "Recepção / Laboratório"),
     ("relatorios", "Relatórios"),
     ("admin", "Administração"),
+    ("fechamentos", "Meus Fechamentos"),
 ]
 
 

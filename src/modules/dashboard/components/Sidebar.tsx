@@ -196,7 +196,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             {isCollapsed ? "•" : "Operacional"}
           </div>
           {temPermissao('caixa') && <NavItem icon={Landmark} label="Caixa do Dia" to="/dashboard/caixa" isCollapsed={isCollapsed} />}
-          {user?.role === 'profissional_saude' && !user?.is_dono && (
+          {temPermissao('fechamentos') && (
             <NavItem icon={FileSignature} label="Meus Fechamentos" to="/dashboard/fechamentos" isCollapsed={isCollapsed} />
           )}
           {temPermissao('estoque') && <NavItem icon={Package} label="Estoque" to="/dashboard/estoque" isCollapsed={isCollapsed} />}

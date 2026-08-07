@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { PageHeader, Card, Btn, Modal, InputField } from '../../../components/ui/shared';
 import { FileSignature, Download, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
-import { fechamentosApi, type APIFechamentoCaixa } from '../../../services/api';
+import { fechamentosApi, filialStore, type APIFechamentoCaixa } from '../../../services/api';
 
 export function FechamentosPage() {
   const [fechamentos, setFechamentos] = useState<APIFechamentoCaixa[]>([]);
@@ -14,10 +14,14 @@ export function FechamentosPage() {
 
   const { user } = useAuth();
 
-  const isProfissional = user?.role === 'profissional_saude' && !user?.is_dono;
+  // Mesma lógica de permissão do Sidebar (temPermissao): dono/admin sempre têm acesso;
+  // demais precisam do módulo "fechamentos" liberado na unidade ativa.
+  const unidadeAtiva = filialStore.get();
+  const temAcesso = user?.is_dono || user?.role === 'administrador' ||
+    (!!unidadeAtiva && (user?.permissoes || []).some(p => String(p.unidade_id) === unidadeAtiva && p.modulo === 'fechamentos'));
 
   const carregar = useCallback(async () => {
-    if (!isProfissional) return;
+    if (!temAcesso) return;
     setErroCarregar('');
     try {
       const data = await fechamentosApi.pendentes();
@@ -25,7 +29,7 @@ export function FechamentosPage() {
     } catch (e) {
       setErroCarregar(e instanceof Error ? e.message : 'Erro ao carregar fechamentos.');
     }
-  }, [isProfissional]);
+  }, [temAcesso]);
 
   useEffect(() => {
     carregar();
@@ -61,11 +65,11 @@ export function FechamentosPage() {
     fechamentosApi.baixarPdf(id).catch(e => alert(e instanceof Error ? e.message : 'Erro ao baixar PDF.'));
   };
 
-  if (!isProfissional) {
+  if (!temAcesso) {
     return (
       <div className="p-8 text-center text-slate-500">
         <AlertCircle className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-        <p>Apenas profissionais de saúde têm acesso a esta página de aceites.</p>
+        <p>Você não tem acesso a esta página. Fale com o administrador para liberar o módulo "Meus Fechamentos".</p>
       </div>
     );
   }

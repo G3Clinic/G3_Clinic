@@ -22,11 +22,12 @@ const MODULOS: { label: string; key: string | null }[] = [
   { label: 'Estoque', key: 'estoque' },
   { label: 'Relatórios', key: 'relatorios' },
   { label: 'Administração', key: 'admin' },
+  { label: 'Meus Fechamentos', key: 'fechamentos' },
 ];
 
 const MODULOS_POR_PAPEL: Record<string, string[]> = {
   '1': ['pacientes', 'agenda', 'recepcao', 'prontuario', 'odontograma', 'caixa', 'financeiro', 'estoque', 'relatorios', 'admin'],
-  '2': ['pacientes', 'agenda', 'recepcao', 'prontuario', 'odontograma', 'caixa'],
+  '2': ['pacientes', 'agenda', 'recepcao', 'prontuario', 'odontograma', 'caixa', 'fechamentos'],
   '3': ['pacientes', 'agenda', 'recepcao', 'caixa'],
   '4': ['financeiro', 'relatorios', 'caixa']
 };

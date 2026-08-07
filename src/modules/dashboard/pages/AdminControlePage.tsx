@@ -3,7 +3,7 @@ import { Shield, CheckCircle2, XCircle, Lock, Users, Grid } from 'lucide-react';
 import { PageHeader, Card, Btn } from '../../../components/ui/shared';
 import { usuariosApi, type APIUsuario } from '../../../services/api';
 
-const MODULES = ['Tela Inicial', 'Cadastro de Pacientes', 'Agenda', 'Recepção', 'Prontuário Eletrônico', 'Relatórios', 'Financeiro', 'Administrativo', 'Cadastro de Usuários'];
+const MODULES = ['Tela Inicial', 'Cadastro de Pacientes', 'Agenda', 'Recepção', 'Prontuário Eletrônico', 'Relatórios', 'Financeiro', 'Administrativo', 'Cadastro de Usuários', 'Meus Fechamentos'];
 const ROLES = ['Administrador', 'Profissional de Saúde', 'Recepcionista', 'Faturamento'];
 // Matriz de referência (capacidades padrão por perfil)
 const ACCESS: Record<string, boolean[]> = {
@@ -16,6 +16,7 @@ const ACCESS: Record<string, boolean[]> = {
   'Financeiro': [true, true, false, true],
   'Administrativo': [true, false, false, true],
   'Cadastro de Usuários': [true, false, false, false],
+  'Meus Fechamentos': [true, true, false, false],
 };
 const ROLE_OPCOES = [
   { v: 'administrador', label: 'Administrador' },
