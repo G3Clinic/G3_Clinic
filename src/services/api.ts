@@ -231,6 +231,9 @@ export interface APIProcedimento {
   valor_padrao?: number | null;
   valor_repasse?: number | null;
   tipo_repasse?: string | null;
+  // Ids de profissionais habilitados a realizar este atendimento.
+  // null/[] = liberado para todos.
+  profissionais_ids?: string[] | null;
   ativo?: boolean;
 }
 export const procedimentosApi = crudApi<APIProcedimento>('procedimentos');

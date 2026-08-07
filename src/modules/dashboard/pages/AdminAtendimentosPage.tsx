@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Stethoscope, Plus, Edit2, Trash2, Info, Save } from 'lucide-react';
+import { Stethoscope, Plus, Edit2, Trash2, Info, Save, Users } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
-import { procedimentosApi, type APIProcedimento } from '../../../services/api';
+import { procedimentosApi, usuariosApi, type APIProcedimento, type APIUsuario } from '../../../services/api';
 
 const TABS = ['consulta', 'procedimento', 'exame'] as const;
 type TabType = typeof TABS[number];
 
-type Form = { tipo: TabType; nome: string; duracao: string; valor: string; valor_repasse: string; tipo_repasse: string };
-const FORM_VAZIO: Form = { tipo: 'consulta', nome: '', duracao: '', valor: '', valor_repasse: '', tipo_repasse: 'fixo' };
+type Form = { tipo: TabType; nome: string; duracao: string; valor: string; valor_repasse: string; tipo_repasse: string; profissionaisIds: string[] };
+const FORM_VAZIO: Form = { tipo: 'consulta', nome: '', duracao: '', valor: '', valor_repasse: '', tipo_repasse: 'fixo', profissionaisIds: [] };
 
 export function AdminAtendimentosPage() {
   const [tab, setTab] = useState<TabType>('consulta');
   const [lista, setLista] = useState<APIProcedimento[]>([]);
+  const [profissionais, setProfissionais] = useState<APIUsuario[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [editandoId, setEditandoId] = useState<string | null>(null);
@@ -19,7 +20,13 @@ export function AdminAtendimentosPage() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
 
-  const setCampo = (c: keyof Form, v: string) => setForm(prev => ({ ...prev, [c]: v }));
+  const setCampo = (c: keyof Omit<Form, 'profissionaisIds'>, v: string) => setForm(prev => ({ ...prev, [c]: v }));
+  const toggleProfissional = (id: string) => setForm(prev => ({
+    ...prev,
+    profissionaisIds: prev.profissionaisIds.includes(id)
+      ? prev.profissionaisIds.filter(x => x !== id)
+      : [...prev.profissionaisIds, id],
+  }));
 
   const carregar = useCallback(() => {
     setLoading(true);
@@ -28,7 +35,9 @@ export function AdminAtendimentosPage() {
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => { usuariosApi.listarProfissionais().then(setProfissionais).catch(() => {}); }, []);
 
+  const nomeProf = (id: string) => profissionais.find(p => p.id === id)?.nome || '—';
   const doTab = lista.filter(p => (p.tipo || 'consulta') === tab);
 
   const abrirNovo = () => { setEditandoId(null); setForm({ ...FORM_VAZIO, tipo: tab }); setErro(''); setModal(true); };
@@ -41,6 +50,7 @@ export function AdminAtendimentosPage() {
       valor: p.valor_padrao != null ? String(p.valor_padrao) : '',
       valor_repasse: p.valor_repasse != null ? String(p.valor_repasse) : '',
       tipo_repasse: p.tipo_repasse || 'fixo',
+      profissionaisIds: p.profissionais_ids || [],
     });
     setErro(''); setModal(true);
   };
@@ -56,6 +66,7 @@ export function AdminAtendimentosPage() {
         valor_padrao: form.valor ? Number(form.valor) : undefined,
         valor_repasse: form.valor_repasse ? Number(form.valor_repasse) : undefined,
         tipo_repasse: form.tipo_repasse,
+        profissionais_ids: form.profissionaisIds.length ? form.profissionaisIds : null,
       };
       if (editandoId) await procedimentosApi.atualizar(editandoId, payload);
       else await procedimentosApi.criar(payload);
@@ -97,21 +108,26 @@ export function AdminAtendimentosPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                {['Nome', 'Duração (min)', 'Valor (R$)', 'Status', 'Ações'].map(h => (
+                {['Nome', 'Duração (min)', 'Valor (R$)', 'Profissionais', 'Status', 'Ações'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={5} className="text-center py-8 text-slate-500">Carregando...</td></tr>
+                <tr><td colSpan={6} className="text-center py-8 text-slate-500">Carregando...</td></tr>
               ) : doTab.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-8 text-slate-500">Nenhum item nesta categoria.</td></tr>
+                <tr><td colSpan={6} className="text-center py-8 text-slate-500">Nenhum item nesta categoria.</td></tr>
               ) : doTab.map(a => (
                 <tr key={a.id} className="hover:bg-slate-50 group">
                   <td className="px-4 py-3 font-medium text-slate-800">{a.nome}</td>
                   <td className="px-4 py-3 text-slate-500">{a.duracao != null ? `${a.duracao} min` : '—'}</td>
                   <td className="px-4 py-3 text-slate-500 font-mono">R$ {(a.valor_padrao ?? 0).toFixed(2)}</td>
+                  <td className="px-4 py-3">
+                    {a.profissionais_ids && a.profissionais_ids.length > 0
+                      ? <span title={a.profissionais_ids.map(nomeProf).join(', ')}><Badge color="blue">{a.profissionais_ids.length === 1 ? nomeProf(a.profissionais_ids[0]) : `${a.profissionais_ids.length} profissionais`}</Badge></span>
+                      : <span className="text-xs text-slate-400">Todos</span>}
+                  </td>
                   <td className="px-4 py-3"><Badge color={a.ativo === false ? 'gray' : 'green'}>{a.ativo === false ? 'Inativo' : 'Ativo'}</Badge></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -149,6 +165,28 @@ export function AdminAtendimentosPage() {
             <InputField label={`Repasse Profissional (${form.tipo_repasse === 'percentual' ? '%' : 'R$'})`} type="number" step="0.01" placeholder="0.00"
               value={form.valor_repasse} onChange={e => setCampo('valor_repasse', e.target.value)} />
           </div>
+
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1.5">
+              <Users size={14} /> Restringir a profissionais específicos
+            </label>
+            <p className="text-[11px] text-slate-400 mb-2">
+              Nenhum marcado = disponível para todos. Marque só quando este atendimento (ex: um valor diferente do padrão) for exclusivo de determinado(s) profissional(is) — assim ele só aparece na Agenda quando esse profissional é selecionado.
+            </p>
+            {profissionais.length === 0 ? (
+              <p className="text-xs text-slate-400">Nenhum profissional cadastrado ainda.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto border border-gray-100 rounded-xl p-2">
+                {profissionais.map(p => (
+                  <label key={p.id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer border transition-colors ${form.profissionaisIds.includes(p.id) ? 'bg-brand-light border-brand-primary text-brand-dark' : 'bg-white border-gray-200 text-slate-600 hover:border-gray-300'}`}>
+                    <input type="checkbox" className="accent-brand-primary" checked={form.profissionaisIds.includes(p.id)} onChange={() => toggleProfissional(p.id)} />
+                    {p.nome}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
           {erro && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{erro}</div>}
         </div>
         <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100">

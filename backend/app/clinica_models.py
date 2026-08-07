@@ -128,6 +128,9 @@ class Procedimento(Base, TenantMixin):
     valor_padrao = Column(Float, default=0)
     valor_repasse = Column(Float, default=0)
     tipo_repasse = Column(String, nullable=True)
+    # Lista de ids de profissionais que podem realizar este atendimento.
+    # None/vazio = liberado para todos (comportamento atual, retrocompatível).
+    profissionais_ids = Column(JSON, nullable=True)
     ativo = Column(Boolean, default=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
 

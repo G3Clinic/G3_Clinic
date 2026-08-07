@@ -122,6 +122,22 @@ export function AgendaPage() {
 
   const setCampo = (c: keyof Form, v: string) => setForm(prev => ({ ...prev, [c]: v }));
 
+  // Um procedimento com profissionais_ids preenchido só aparece pro(s) profissional(is)
+  // marcados no cadastro (Cadastrar Atendimentos) — evita a recepção escolher, por engano,
+  // o atendimento de outro profissional com valor diferente. Sem profissional selecionado
+  // ainda, mostra tudo (senão o campo Procedimento ficaria vazio até escolher o médico).
+  const procedimentosDoProfissional = (profissionalId: string) =>
+    procedimentos.filter(p => !profissionalId || !p.profissionais_ids?.length || p.profissionais_ids.includes(profissionalId));
+
+  const handleProfissionalChange = (profId: string) => {
+    setForm(prev => {
+      const disponiveis = procedimentosDoProfissional(profId);
+      // Se o procedimento já escolhido não é mais válido pro novo profissional, limpa.
+      const aindaValido = !prev.procedimento_id || disponiveis.some(p => p.id === prev.procedimento_id);
+      return { ...prev, profissional_id: profId, ...(aindaValido ? {} : { procedimento_id: '' }) };
+    });
+  };
+
   const handleProcedimentoChange = (procId: string) => {
     const proc = procedimentos.find(p => p.id === procId);
     setForm(prev => {
@@ -540,7 +556,7 @@ export function AgendaPage() {
             <SelectField label="Status" value={form.status} onChange={e => setCampo('status', e.target.value)}>
               {STATUS.map(s => <option key={s}>{s}</option>)}
             </SelectField>
-            <SelectField label="Profissional" value={form.profissional_id} onChange={e => setCampo('profissional_id', e.target.value)}>
+            <SelectField label="Profissional" value={form.profissional_id} onChange={e => handleProfissionalChange(e.target.value)}>
               <option value="">Selecione...</option>
               {profissionais.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
             </SelectField>
@@ -556,8 +572,11 @@ export function AgendaPage() {
             </SelectField>
             <SelectField label="Procedimento" value={form.procedimento_id} onChange={e => handleProcedimentoChange(e.target.value)}>
               <option value="">Selecione...</option>
-              {procedimentos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+              {procedimentosDoProfissional(form.profissional_id).map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
             </SelectField>
+            {!form.profissional_id && procedimentos.some(p => p.profissionais_ids?.length) && (
+              <p className="col-span-2 -mt-2 text-[11px] text-slate-400">Selecione o profissional para ver só os atendimentos liberados para ele.</p>
+            )}
           </div>
           <div className="grid grid-cols-3 gap-4">
             <InputField label="Data *" type="date" required value={form.data_agendamento} onChange={e => setCampo('data_agendamento', e.target.value)} />
