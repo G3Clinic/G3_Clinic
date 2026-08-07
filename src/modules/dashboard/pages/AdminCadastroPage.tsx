@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Plus, Edit2, Trash2, Save, KeyRound, Check, AlertTriangle } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Save, KeyRound, Check, AlertTriangle, Search } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import { usuariosApi, filiaisApi, permissoesApi, type APIUsuario, type APIFilial } from '../../../services/api';
 
@@ -46,7 +46,13 @@ const UFS = ['SP', 'RJ', 'MG', 'BA'];
 export function AdminCadastroPage() {
   const [usuarios, setUsuarios] = useState<APIUsuario[]>([]);
   const [filiais, setFiliais] = useState<APIFilial[]>([]);
+  const [vinculosFiliais, setVinculosFiliais] = useState<{ usuario_id: string; unidade_id: number }[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [busca, setBusca] = useState('');
+  const [filtroPapel, setFiltroPapel] = useState('');
+  const [filtroUnidade, setFiltroUnidade] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('');
 
   const [modal, setModal] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -73,12 +79,22 @@ export function AdminCadastroPage() {
 
   const carregar = useCallback(() => {
     setLoading(true);
-    Promise.all([usuariosApi.listar(), filiaisApi.listar()])
-      .then(([us, fs]) => { setUsuarios(us); setFiliais(fs); })
+    Promise.all([usuariosApi.listar(), filiaisApi.listar(), usuariosApi.listarFiliaisTodosUsuarios()])
+      .then(([us, fs, vs]) => { setUsuarios(us); setFiliais(fs); setVinculosFiliais(vs); })
       .catch(e => console.error('Erro ao carregar usuários:', e))
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
+
+  const unidadesDoUsuario = (usuarioId: string) => vinculosFiliais.filter(v => v.usuario_id === usuarioId).map(v => v.unidade_id);
+
+  const usuariosFiltrados = usuarios.filter(u => {
+    const buscaOk = !busca.trim() || u.nome.toLowerCase().includes(busca.toLowerCase()) || (u.email || '').toLowerCase().includes(busca.toLowerCase());
+    const papelOk = !filtroPapel || u.role === filtroPapel;
+    const unidadeOk = !filtroUnidade || unidadesDoUsuario(u.id).includes(Number(filtroUnidade));
+    const statusOk = !filtroStatus || (filtroStatus === 'ativo' ? u.ativo !== false : u.ativo === false);
+    return buscaOk && papelOk && unidadeOk && statusOk;
+  });
 
   const camposProfissional = () => ({
     conselho_tipo: form.conselho_tipo, conselho_numero: form.conselho_numero, conselho_uf: form.conselho_uf,
@@ -228,6 +244,36 @@ export function AdminCadastroPage() {
       <PageHeader icon={Users} title="Cadastro de Usuários" subtitle="Crie e gerencie todos os usuários que acessam o sistema">
         <Btn icon={Plus} onClick={abrirNovo}>+ Novo Usuário</Btn>
       </PageHeader>
+
+      <Card padding={false} className="bg-white border-gray-200 shadow-sm">
+        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+          <div className="sm:col-span-2 lg:col-span-1">
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">Buscar</label>
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Nome ou e-mail..."
+                className="w-full border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary" />
+            </div>
+          </div>
+          <SelectField label="Perfil" value={filtroPapel} onChange={e => setFiltroPapel(e.target.value)}>
+            <option value="">Todos</option>
+            <option value="administrador">Administrador</option>
+            <option value="profissional_saude">Profissional de Saúde</option>
+            <option value="recepcionista">Recepcionista</option>
+            <option value="faturamento">Faturamento</option>
+          </SelectField>
+          <SelectField label="Unidade" value={filtroUnidade} onChange={e => setFiltroUnidade(e.target.value)}>
+            <option value="">Todas</option>
+            {filiais.map(f => <option key={f.id} value={f.id}>{f.nome}</option>)}
+          </SelectField>
+          <SelectField label="Status" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
+            <option value="">Todos</option>
+            <option value="ativo">Ativo</option>
+            <option value="inativo">Inativo</option>
+          </SelectField>
+        </div>
+      </Card>
+
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -243,7 +289,9 @@ export function AdminCadastroPage() {
                 <tr><td colSpan={6} className="text-center py-8 text-slate-500">Carregando...</td></tr>
               ) : usuarios.length === 0 ? (
                 <tr><td colSpan={6} className="text-center py-8 text-slate-500">Nenhum usuário cadastrado.</td></tr>
-              ) : usuarios.map(u => (
+              ) : usuariosFiltrados.length === 0 ? (
+                <tr><td colSpan={6} className="text-center py-8 text-slate-500">Nenhum usuário encontrado para os filtros aplicados.</td></tr>
+              ) : usuariosFiltrados.map(u => (
                 <tr key={u.id} className="hover:bg-slate-50 group">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">

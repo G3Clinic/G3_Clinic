@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Stethoscope, Plus, Edit2, Trash2, Info, Save, Users } from 'lucide-react';
+import { Stethoscope, Plus, Edit2, Trash2, Info, Save, Users, Search } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import { procedimentosApi, usuariosApi, type APIProcedimento, type APIUsuario } from '../../../services/api';
 
@@ -19,6 +19,7 @@ export function AdminAtendimentosPage() {
   const [form, setForm] = useState<Form>(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
+  const [buscaProf, setBuscaProf] = useState('');
 
   const setCampo = (c: keyof Omit<Form, 'profissionaisIds'>, v: string) => setForm(prev => ({ ...prev, [c]: v }));
   const toggleProfissional = (id: string) => setForm(prev => ({
@@ -39,8 +40,9 @@ export function AdminAtendimentosPage() {
 
   const nomeProf = (id: string) => profissionais.find(p => p.id === id)?.nome || '—';
   const doTab = lista.filter(p => (p.tipo || 'consulta') === tab);
+  const profissionaisFiltrados = profissionais.filter(p => p.nome.toLowerCase().includes(buscaProf.toLowerCase()));
 
-  const abrirNovo = () => { setEditandoId(null); setForm({ ...FORM_VAZIO, tipo: tab }); setErro(''); setModal(true); };
+  const abrirNovo = () => { setEditandoId(null); setForm({ ...FORM_VAZIO, tipo: tab }); setErro(''); setBuscaProf(''); setModal(true); };
   const abrirEdicao = (p: APIProcedimento) => {
     setEditandoId(p.id);
     setForm({
@@ -52,7 +54,7 @@ export function AdminAtendimentosPage() {
       tipo_repasse: p.tipo_repasse || 'fixo',
       profissionaisIds: p.profissionais_ids || [],
     });
-    setErro(''); setModal(true);
+    setErro(''); setBuscaProf(''); setModal(true);
   };
 
   const salvar = async () => {
@@ -176,14 +178,26 @@ export function AdminAtendimentosPage() {
             {profissionais.length === 0 ? (
               <p className="text-xs text-slate-400">Nenhum profissional cadastrado ainda.</p>
             ) : (
-              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto border border-gray-100 rounded-xl p-2">
-                {profissionais.map(p => (
-                  <label key={p.id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer border transition-colors ${form.profissionaisIds.includes(p.id) ? 'bg-brand-light border-brand-primary text-brand-dark' : 'bg-white border-gray-200 text-slate-600 hover:border-gray-300'}`}>
-                    <input type="checkbox" className="accent-brand-primary" checked={form.profissionaisIds.includes(p.id)} onChange={() => toggleProfissional(p.id)} />
-                    {p.nome}
-                  </label>
-                ))}
-              </div>
+              <>
+                <div className="relative mb-2">
+                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input value={buscaProf} onChange={e => setBuscaProf(e.target.value)} placeholder="Buscar profissional..."
+                    className="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary" />
+                </div>
+                {form.profissionaisIds.length > 0 && (
+                  <p className="text-[11px] text-brand-primary font-semibold mb-1.5">{form.profissionaisIds.length} selecionado(s)</p>
+                )}
+                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto border border-gray-100 rounded-xl p-2">
+                  {profissionaisFiltrados.length === 0 ? (
+                    <p className="text-xs text-slate-400 p-1">Nenhum profissional encontrado.</p>
+                  ) : profissionaisFiltrados.map(p => (
+                    <label key={p.id} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer border transition-colors ${form.profissionaisIds.includes(p.id) ? 'bg-brand-light border-brand-primary text-brand-dark' : 'bg-white border-gray-200 text-slate-600 hover:border-gray-300'}`}>
+                      <input type="checkbox" className="accent-brand-primary" checked={form.profissionaisIds.includes(p.id)} onChange={() => toggleProfissional(p.id)} />
+                      {p.nome}
+                    </label>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 

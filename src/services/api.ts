@@ -329,6 +329,9 @@ export const usuariosApi = {
     }),
   listarFiliaisUsuario: (id: string) =>
     apiFetch<number[]>(`/admin/usuarios/${id}/filiais`),
+  // Vínculos usuário↔filial de todos os usuários, num só request (pra filtrar por unidade na listagem)
+  listarFiliaisTodosUsuarios: () =>
+    apiFetch<{ usuario_id: string; unidade_id: number }[]>('/admin/usuarios/filiais'),
   definirFiliaisUsuario: (id: string, unidade_ids: number[]) =>
     apiFetch<{ ok: boolean }>(`/admin/usuarios/${id}/filiais`, {
       method: 'PUT', body: JSON.stringify({ unidade_ids }),

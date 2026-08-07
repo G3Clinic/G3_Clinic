@@ -353,6 +353,19 @@ def vincular_filial(
     return {"ok": True}
 
 
+@router.get("/admin/usuarios/filiais")
+def listar_filiais_todos_usuarios(
+    user: cm.PerfilUsuario = Depends(get_current_user),
+    empresa_id: int = Depends(get_empresa_id),
+    db: Session = Depends(get_db),
+):
+    """Vínculos usuário↔filial de toda a empresa, num só request (tela de Usuários usa
+    isso pra filtrar por unidade sem precisar de N chamadas, uma por usuário)."""
+    _exige_admin(user)
+    vinculos = db.query(tm.UsuarioFilial).filter(tm.UsuarioFilial.empresa_id == empresa_id).all()
+    return [{"usuario_id": v.usuario_id, "unidade_id": v.unidade_id} for v in vinculos]
+
+
 @router.get("/admin/usuarios/{usuario_id}/filiais")
 def listar_filiais_usuario(
     usuario_id: str,
