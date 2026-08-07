@@ -269,9 +269,14 @@ export function ProntuarioPage() {
     setPaciente(p); setActiveTab('triagem'); setTri({}); setExames(''); setReceita([]); setAtestado({ dias: '', cid: '', texto: '' });
     carregarVacinas(p.id);
     configApi.obter(`anamnese:${p.id}`).then(v => setAnamnese(v || null)).catch(() => setAnamnese(null));
-    // acha atendimento existente do paciente ou cria um novo
+    // acha o atendimento existente do paciente (histórico contínuo — não é por
+    // filial nem por data) ou cria um novo. Se por algum motivo houver mais de um
+    // (ex.: registros antigos, de antes do filtro por filial ter sido corrigido),
+    // pega o mais antigo — é onde está o histórico de verdade.
     const todos = await atendimentosClinicosApi.listar().catch(() => []);
-    let atd = todos.find(a => a.paciente_id === p.id);
+    const doPaciente = todos.filter(a => a.paciente_id === p.id)
+      .sort((a, b) => (a.data_atendimento || '').localeCompare(b.data_atendimento || ''));
+    let atd = doPaciente[0];
     if (!atd) atd = await atendimentosClinicosApi.criar({ paciente_id: p.id, data_atendimento: new Date().toISOString() });
     setAtendimentoId(atd.id);
     await carregarAtendimento(atd.id);

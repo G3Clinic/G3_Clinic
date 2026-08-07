@@ -65,6 +65,18 @@ def _cast_pk(model, pk_name: str, raw: str):
     return raw
 
 
+# Tabelas com coluna unidade_id que NÃO devem ser filtradas por filial na listagem,
+# mesmo carimbando a unidade na criação (só como dado informativo/relatório).
+# atendimentos_clinicos: o prontuário acumula evoluções num único "atendimento" por
+# paciente (ver ProntuarioPage.abrirProntuario, que faz find-or-create). Se a listagem
+# filtrasse por filial, trocar de unidade faria o sistema "não achar" o atendimento já
+# existente do paciente (criado numa filial diferente) e criar um novo em branco —
+# perdendo o acesso ao histórico de evoluções/documentos já salvos (eles continuam no
+# banco, só ficam inacessíveis via essa busca). Histórico clínico é do paciente, não da
+# unidade onde ele foi visto.
+_SEM_FILTRO_DE_UNIDADE_NA_LISTAGEM = {"atendimentos_clinicos"}
+
+
 def make_crud_router(model, prefix: str, modulo: str) -> APIRouter:
     router = APIRouter(prefix=f"/api/{prefix}", tags=[prefix])
     columns = {c.name for c in model.__table__.columns}
@@ -104,7 +116,10 @@ def make_crud_router(model, prefix: str, modulo: str) -> APIRouter:
         # e quando o cliente não filtrou explicitamente por unidade_id.
         # Inclui registros sem filial (NULL) — compartilhados/legados — para
         # não "sumir" dados ao trocar de unidade.
-        if "unidade_id" in columns and x_filial_id is not None and "unidade_id" not in params:
+        if (
+            "unidade_id" in columns and x_filial_id is not None and "unidade_id" not in params
+            and prefix not in _SEM_FILTRO_DE_UNIDADE_NA_LISTAGEM
+        ):
             query = query.filter(
                 (model.unidade_id == x_filial_id) | (model.unidade_id.is_(None))
             )
