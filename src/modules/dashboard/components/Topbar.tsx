@@ -46,11 +46,11 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
 
   const carregarNotificacoes = () => {
     setLoadingNotif(true);
-    notificacoesApi.listar()
+    notificacoesApi.minhas()
       .then(data => setNotifications(
         [...data].sort((a, b) => new Date(b.criado_em || 0).getTime() - new Date(a.criado_em || 0).getTime())
       ))
-      .catch(() => setNotifications([]))   // 403 (não-admin) / offline → sem notificações
+      .catch(() => setNotifications([]))   // offline / erro → sem notificações
       .finally(() => setLoadingNotif(false));
   };
 
@@ -89,7 +89,7 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
     const naoLidas = notifications.filter(n => !n.lida);
     setNotifications(prev => prev.map(n => ({ ...n, lida: true })));  // otimista
     try {
-      await Promise.all(naoLidas.map(n => notificacoesApi.atualizar(n.id, { lida: true })));
+      await Promise.all(naoLidas.map(n => notificacoesApi.marcarMinhaLida(n.id)));
     } catch {
       carregarNotificacoes();  // reverte para o estado real do servidor em caso de erro
     }

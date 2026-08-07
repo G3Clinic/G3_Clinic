@@ -851,6 +851,44 @@ def get_profissionais(
     return [{"id": p.id, "nome": p.nome, "role": p.role, "is_dono": p.is_dono} for p in profissionais]
 
 
+# Notificações pessoais — diferente do CRUD genérico de /api/notificacoes (que exige
+# módulo "admin", usado só pra disparar broadcasts em Administração). Qualquer usuário
+# autenticado pode ver as SUAS: as dirigidas a ele (usuario_alvo_id) + as broadcasts do
+# seu papel/de "todos". Sem isso, quem não é admin nunca via nada no sininho.
+_PAPEL_PARA_PUBLICO = {"profissional_saude": "medicos", "recepcionista": "recepcao", "administrador": "admin"}
+
+@app.get("/api/minhas-notificacoes")
+def minhas_notificacoes(user=Depends(get_current_user), db: Session = Depends(get_db)):
+    publicos = ["todos"]
+    if user.role in _PAPEL_PARA_PUBLICO:
+        publicos.append(_PAPEL_PARA_PUBLICO[user.role])
+    notifs = db.query(clinica_models.Notificacao).filter(
+        clinica_models.Notificacao.empresa_id == user.empresa_id,
+    ).filter(
+        (clinica_models.Notificacao.usuario_alvo_id == user.id) |
+        ((clinica_models.Notificacao.usuario_alvo_id.is_(None)) & (clinica_models.Notificacao.publico_alvo.in_(publicos)))
+    ).order_by(clinica_models.Notificacao.criado_em.desc()).all()
+    return [
+        {"id": n.id, "publico_alvo": n.publico_alvo, "tipo": n.tipo, "titulo": n.titulo,
+         "mensagem": n.mensagem, "lida": n.lida, "criado_em": n.criado_em}
+        for n in notifs
+    ]
+
+
+@app.put("/api/minhas-notificacoes/{notif_id}/lida")
+def marcar_minha_notificacao_lida(notif_id: str, user=Depends(get_current_user), db: Session = Depends(get_db)):
+    n = db.query(clinica_models.Notificacao).filter(
+        clinica_models.Notificacao.id == notif_id,
+        clinica_models.Notificacao.empresa_id == user.empresa_id,
+    ).first()
+    if not n:
+        raise HTTPException(status_code=404, detail="Notificação não encontrada")
+    if n.usuario_alvo_id and n.usuario_alvo_id != user.id:
+        raise HTTPException(status_code=403, detail="Esta notificação não é sua")
+    n.lida = True
+    db.commit()
+    return {"ok": True}
+
 
 def _get_paciente_do_tenant(db: Session, paciente_id: int, empresa_id: int):
     p = db.query(models.Paciente).filter(

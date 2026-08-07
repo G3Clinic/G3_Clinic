@@ -593,7 +593,8 @@ class Notificacao(Base, TenantMixin):
     __tablename__ = "notificacoes"
 
     id = Column(String, primary_key=True, default=_uid)
-    publico_alvo = Column(String, nullable=True)  # todos/medicos/recepcao/admin
+    publico_alvo = Column(String, nullable=True)  # todos/medicos/recepcao/admin (broadcast)
+    usuario_alvo_id = Column(String, nullable=True)  # notificação dirigida a UM usuário específico (ex: fechamento de caixa)
     tipo = Column(String, nullable=True)          # info/success/warning/error
     titulo = Column(String)
     mensagem = Column(Text, nullable=True)

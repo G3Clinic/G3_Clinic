@@ -57,10 +57,23 @@ def gerar_fechamento(
     # Por agora, para simular a prova de conceito:
     total = sum([(l.valor or 0) for l in lancamentos if l.descricao and "Repasse" in l.descricao])
     fechamento.valor_total = total
-    
+
+    # Avisa o profissional no sininho de notificações — sem isso ele só saberia
+    # entrando manualmente em "Meus Fechamentos".
+    data_br = fechamento.data_fechamento.strftime("%d/%m/%Y")
+    notificacao = cm.Notificacao(
+        empresa_id=user.empresa_id,
+        usuario_alvo_id=dados.medico_id,
+        tipo="info",
+        titulo="Novo fechamento de caixa para assinar",
+        mensagem=f"Fechamento do dia {data_br}, no valor de R$ {total:.2f}, está pendente da sua assinatura eletrônica.",
+        criado_por=user.id,
+    )
+    db.add(notificacao)
+
     db.commit()
     db.refresh(fechamento)
-    
+
     return {"message": "Fechamento gerado com sucesso", "fechamento_id": fechamento.id}
 
 

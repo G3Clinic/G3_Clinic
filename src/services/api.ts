@@ -513,7 +513,17 @@ export const finLancamentosApi = crudApi<APIFinLancamento>('financeiro_lancament
 
 // Notificações
 export interface APINotificacao { id: string; publico_alvo?: string | null; tipo?: string | null; titulo: string; mensagem?: string | null; lida?: boolean; criado_em?: string | null; }
-export const notificacoesApi = crudApi<APINotificacao>('notificacoes');
+const notificacoesCrud = crudApi<APINotificacao>('notificacoes');
+export const notificacoesApi = {
+  // CRUD genérico (módulo "admin") — usado só em Disparar Notificações (broadcast).
+  listar: notificacoesCrud.listar,
+  criar: notificacoesCrud.criar,
+  atualizar: notificacoesCrud.atualizar,
+  // "Minhas" — qualquer usuário autenticado: as dirigidas a ele + broadcasts do seu papel.
+  minhas: () => apiFetch<APINotificacao[]>('/api/minhas-notificacoes'),
+  marcarMinhaLida: (id: string) =>
+    apiFetch<{ ok: boolean }>(`/api/minhas-notificacoes/${id}/lida`, { method: 'PUT' }),
+};
 
 // Modelos de prontuário (evolução) — HTML reutilizável guardado em `conteudo`
 export interface APIModeloProntuario { id: string; titulo?: string | null; conteudo?: any; tipo_acesso?: string | null; profissional_id?: string | null; criado_em?: string | null; }
