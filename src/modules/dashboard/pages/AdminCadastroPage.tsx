@@ -26,7 +26,7 @@ const MODULOS: { label: string; key: string | null }[] = [
 ];
 
 const MODULOS_POR_PAPEL: Record<string, string[]> = {
-  '1': ['pacientes', 'agenda', 'recepcao', 'prontuario', 'odontograma', 'caixa', 'financeiro', 'estoque', 'relatorios', 'admin'],
+  '1': ['pacientes', 'agenda', 'recepcao', 'prontuario', 'odontograma', 'caixa', 'financeiro', 'estoque', 'relatorios', 'admin', 'fechamentos'],
   '2': ['pacientes', 'agenda', 'recepcao', 'prontuario', 'odontograma', 'caixa', 'fechamentos'],
   '3': ['pacientes', 'agenda', 'recepcao', 'caixa'],
   '4': ['financeiro', 'relatorios', 'caixa']
