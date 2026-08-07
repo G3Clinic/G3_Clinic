@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, Lock, Calendar, Plus, TrendingUp, X } from 'lucide-react';
+import { DollarSign, Lock, Calendar, Plus, TrendingUp, X, BarChart3 } from 'lucide-react';
 import { PageHeader, Card, Btn, InputField, SelectField } from '../../../components/ui/shared';
 import { procedimentosApi, finLancamentosApi, type APIProcedimento, type APIFinLancamento } from '../../../services/api';
+import { KpisFinanceirosPanel } from './KpisFinanceirosPanel';
 
 const mesAtual = () => new Date().toISOString().slice(0, 7);
 
 export function FinDashboardPage() {
+  const [aba, setAba] = useState<'cardapio' | 'kpis'>('cardapio');
   const [mes, setMes] = useState(mesAtual());
   const [procedimentos, setProcedimentos] = useState<APIProcedimento[]>([]);
   const [lancamentos, setLancamentos] = useState<APIFinLancamento[]>([]);
@@ -60,13 +62,33 @@ export function FinDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={DollarSign} title="Dashboard Financeiro" subtitle="Gestão de cardápio de serviços e lançamentos mensais">
-        <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-xl border border-gray-200">
-          <span className="text-sm font-bold text-slate-600 flex items-center gap-2"><Calendar size={16} /> Período:</span>
-          <input type="month" value={mes} onChange={e => setMes(e.target.value)} className="border-none bg-transparent font-bold text-brand-primary focus:outline-none focus:ring-0" />
-        </div>
+      <PageHeader icon={DollarSign} title="Dashboard Financeiro" subtitle="Cardápio de serviços, lançamentos e indicadores financeiros">
+        {aba === 'cardapio' && (
+          <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-xl border border-gray-200">
+            <span className="text-sm font-bold text-slate-600 flex items-center gap-2"><Calendar size={16} /> Período:</span>
+            <input type="month" value={mes} onChange={e => setMes(e.target.value)} className="border-none bg-transparent font-bold text-brand-primary focus:outline-none focus:ring-0" />
+          </div>
+        )}
       </PageHeader>
 
+      <div className="flex gap-2 border-b border-gray-200 pb-px">
+        <button
+          onClick={() => setAba('cardapio')}
+          className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${aba === 'cardapio' ? 'border-brand-primary text-brand-primary bg-brand-light/20' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-gray-50'}`}
+        >
+          <DollarSign size={16} /> Cardápio & Lançamentos
+        </button>
+        <button
+          onClick={() => setAba('kpis')}
+          className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${aba === 'kpis' ? 'border-brand-primary text-brand-primary bg-brand-light/20' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-gray-50'}`}
+        >
+          <BarChart3 size={16} /> KPIs Financeiros
+        </button>
+      </div>
+
+      {aba === 'kpis' && <KpisFinanceirosPanel />}
+
+      {aba === 'cardapio' && (
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Cardápio (global) */}
         <div className="flex flex-col">
@@ -145,6 +167,7 @@ export function FinDashboardPage() {
           </Card>
         </div>
       </div>
+      )}
     </div>
   );
 }

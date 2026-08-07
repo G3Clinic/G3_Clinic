@@ -511,6 +511,31 @@ export const caixaTurnosApi = crudApi<APICaixaTurno>('caixa_turnos');
 export interface APIFinLancamento { id: string; procedimento_id?: string | null; mes?: string | null; quantidade?: number | null; }
 export const finLancamentosApi = crudApi<APIFinLancamento>('financeiro_lancamentos');
 
+// Financeiro — KPIs (guia de indicadores financeiros)
+export interface APIKpisFinanceiros {
+  periodo: { inicio: string; fim: string };
+  faturamento_bruto: { total: number; qtd_recebimentos: number };
+  ticket_medio: number;
+  receita_por_profissional: { profissional_id: string; profissional: string; receita: number; atendimentos: number }[];
+  receita_por_convenio: { origem: string; receita: number; pct: number }[];
+  receita_por_unidade: { unidade_id: number | null; unidade: string; receita: number }[];
+  pct_repasse: { faturamento_base: number; total_repassado: number; pct: number };
+  custos_por_categoria: { categoria: string; total: number }[];
+  custos_total: number;
+  repasse_recepcionistas: { total: number; qtd_pendentes: number };
+  margem_por_procedimento: { id: string; nome: string; valor_padrao: number; valor_repasse_efetivo: number; margem_absoluta: number; margem_pct: number }[];
+  dre: { receita_bruta: number; repasse_profissionais: number; repasse_recepcionistas: number; custos_operacionais: number; resultado_liquido: number; margem_liquida_pct: number };
+  inadimplencia: { atendimentos_realizados: number; valor_cobrado: number; valor_recebido: number; valor_pendente: number; taxa_pct: number };
+  fechamentos_caixa_diario: { turno_id: string; unidade_id: number | null; recepcionista: string; data_abertura: string | null; data_fechamento: string | null; status_auditoria: string | null; total_recebido_no_turno: number }[];
+  orcamentos: { quantidade: number; valor_total: number; observacao: string };
+  ocupacao_agenda: { atendimentos_finalizados: number; agendamentos_nao_cancelados: number; taxa_comparecimento_pct: number; observacao: string };
+  cancelamento: { cancelados: number; total_agendamentos: number; taxa_pct: number };
+}
+export const relatoriosFinanceirosApi = {
+  kpis: (dataInicio: string, dataFim: string) =>
+    apiFetch<APIKpisFinanceiros>(`/api/relatorios/kpis-financeiros?data_inicio=${dataInicio}&data_fim=${dataFim}`),
+};
+
 // Notificações
 export interface APINotificacao { id: string; publico_alvo?: string | null; tipo?: string | null; titulo: string; mensagem?: string | null; lida?: boolean; criado_em?: string | null; }
 const notificacoesCrud = crudApi<APINotificacao>('notificacoes');
