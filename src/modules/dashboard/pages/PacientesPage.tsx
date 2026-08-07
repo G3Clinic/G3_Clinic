@@ -110,6 +110,7 @@ export function PacientesPage() {
   // paciente (não pré-seleciona o do perfil atual) — assim quem estava vendo o
   // perfil continua na mesma aba, e o prontuário roda em tela cheia na outra.
   const irProntuario = () => {
+    if (perfilAtivo) pacienteStore.set({ id: Number(perfilAtivo.id), nome: perfilAtivo.nome });
     setModalConsultaOpen(false);
     window.open('/dashboard/prontuario', '_blank');
   };

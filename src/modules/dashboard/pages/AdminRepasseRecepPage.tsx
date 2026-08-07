@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { DollarSign, Plus, Edit2, Trash2, Save } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
-import { repasseRecepApi, usuariosApi, type APIRepasseRecep, type APIUsuario } from '../../../services/api';
+import { repasseRecepApi, usuariosApi, filialStore, type APIRepasseRecep, type APIUsuario } from '../../../services/api';
 
 const TIPOS = ['Percentual por Consulta', 'Valor Fixo Mensal', 'Valor Fixo por Consulta'];
 
@@ -23,7 +23,16 @@ export function AdminRepasseRecepPage() {
   const carregar = useCallback(() => {
     setLoading(true);
     repasseRecepApi.listar().then(setLista).catch(() => {}).finally(() => setLoading(false));
-    usuariosApi.listar().then(us => setRecepcionistas(us.filter(u => u.role === 'recepcionista'))).catch(() => {});
+    const unidadeAtiva = filialStore.get();
+    Promise.all([usuariosApi.listar(), usuariosApi.listarFiliaisTodosUsuarios()])
+      .then(([us, vinculos]) => {
+        const recepDaUnidade = us.filter(u =>
+          u.role === 'recepcionista' &&
+          (!unidadeAtiva || vinculos.some(v => v.usuario_id === u.id && String(v.unidade_id) === unidadeAtiva))
+        );
+        setRecepcionistas(recepDaUnidade);
+      })
+      .catch(() => {});
   }, []);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -41,7 +50,13 @@ export function AdminRepasseRecepPage() {
     if (!recepId) { setErro('Selecione a recepcionista.'); return; }
     setSalvando(true);
     try {
-      const payload = { recepcionista_id: recepId, tipo, valor: valor ? Number(valor) : undefined, referencia: referencia.trim() || undefined, status };
+      // "por Consulta" (Percentual/Fixo) é uma regra de taxa, não um lançamento — não tem
+      // status de pagamento: o valor é aplicado direto quando o paciente paga a consulta
+      // (ver cálculo em Relatórios). Só "Valor Fixo Mensal" tem Pendente/Pago de verdade.
+      const payload = {
+        recepcionista_id: recepId, tipo, valor: valor ? Number(valor) : undefined, referencia: referencia.trim() || undefined,
+        status: tipo.includes('por Consulta') ? undefined : status,
+      };
       if (editId) await repasseRecepApi.atualizar(editId, payload); else await repasseRecepApi.criar(payload);
       setModal(false); carregar();
     } catch (e) { setErro(e instanceof Error ? e.message : 'Erro ao salvar.'); }
@@ -50,8 +65,11 @@ export function AdminRepasseRecepPage() {
   const marcarPago = async (r: APIRepasseRecep) => { await repasseRecepApi.atualizar(r.id, { status: 'Pago' }); carregar(); };
   const excluir = async (r: APIRepasseRecep) => { if (confirm('Excluir este repasse?')) { await repasseRecepApi.excluir(r.id); carregar(); } };
 
-  const totalPendente = lista.filter(r => r.status !== 'Pago').reduce((s, r) => s + (r.valor || 0), 0);
-  const totalPago = lista.filter(r => r.status === 'Pago').reduce((s, r) => s + (r.valor || 0), 0);
+  // Regras "por Consulta" ficam fora dessas somas — não são valores pendentes/pagos, são
+  // taxas (% ou R$ por atendimento); somar entraria % junto com R$ na mesma conta.
+  const listaComStatus = lista.filter(r => !r.tipo?.includes('por Consulta'));
+  const totalPendente = listaComStatus.filter(r => r.status !== 'Pago').reduce((s, r) => s + (r.valor || 0), 0);
+  const totalPago = listaComStatus.filter(r => r.status === 'Pago').reduce((s, r) => s + (r.valor || 0), 0);
 
   return (
     <div className="space-y-5">
