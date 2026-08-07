@@ -8,7 +8,6 @@ import {
 import clsx from 'clsx';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useAuth } from '../../../contexts/AuthContext';
-import { useProntuarioFloat } from '../../../contexts/ProntuarioFloatContext';
 import { filialStore } from '../../../services/api';
 
 interface SidebarProps {
@@ -58,27 +57,10 @@ function NavGroup({ icon: Icon, label, children, defaultOpen = false, isCollapse
   );
 }
 
-function NavItem({ icon: Icon, label, to, isCollapsed = false, onClick }: { icon: React.ElementType; label: string; to?: string; isCollapsed?: boolean; onClick?: () => void }) {
-  // Quando tem onClick (ex.: abrir o Prontuário como janela flutuante), não é uma
-  // rota de verdade — vira botão em vez de NavLink, sem estado "ativo".
-  if (onClick) {
-    return (
-      <button
-        onClick={onClick}
-        className={clsx(
-          'flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 group overflow-hidden w-full text-left hover:bg-brand-light/50 hover:text-brand-primary',
-          isCollapsed ? 'justify-center' : 'gap-3',
-        )}
-        title={isCollapsed ? label : undefined}
-      >
-        <Icon size={18} className="shrink-0 transition-colors text-slate-400 group-hover:text-brand-primary" />
-        <span className={clsx("truncate transition-all duration-300", isCollapsed ? "w-0 opacity-0" : "w-auto opacity-100")}>{label}</span>
-      </button>
-    );
-  }
+function NavItem({ icon: Icon, label, to, isCollapsed = false }: { icon: React.ElementType; label: string; to: string; isCollapsed?: boolean }) {
   return (
     <NavLink
-      to={to || '#'}
+      to={to}
       end
       className={({ isActive }) =>
         clsx(
@@ -128,7 +110,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { abrirProntuario } = useProntuarioFloat();
 
   const unidadeAtiva = filialStore.get();
   const temPermissao = (modKey: string) => {
@@ -208,7 +189,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           {temPermissao('pacientes') && <NavItem icon={Users} label="Pacientes" to="/dashboard/pacientes" isCollapsed={isCollapsed} />}
           {temPermissao('agenda') && <NavItem icon={Calendar} label="Agenda" to="/dashboard/agenda" isCollapsed={isCollapsed} />}
           {temPermissao('recepcao') && <NavItem icon={MonitorPlay} label="Recepção" to="/dashboard/recepcao" isCollapsed={isCollapsed} />}
-          {temPermissao('prontuario') && <NavItem icon={ClipboardList} label="Prontuário Eletrônico" onClick={abrirProntuario} isCollapsed={isCollapsed} />}
+          {temPermissao('prontuario') && <NavItem icon={ClipboardList} label="Prontuário Eletrônico" to="/dashboard/prontuario" isCollapsed={isCollapsed} />}
           {temPermissao('odontograma') && <NavItem icon={Smile} label="Odontograma" to="/dashboard/odontograma" isCollapsed={isCollapsed} />}
 
           <div className={clsx("text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mt-5 mb-2", isCollapsed && "text-center px-0")}>

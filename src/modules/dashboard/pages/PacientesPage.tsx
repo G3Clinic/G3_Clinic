@@ -7,7 +7,6 @@ import { cpfValido, formatarCpf } from '../../../utils/cpf';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { useMemed } from '../../../hooks/useMemed';
-import { useProntuarioFloat } from '../../../contexts/ProntuarioFloatContext';
 
 type Paciente = {
   id: string;
@@ -107,13 +106,12 @@ export function PacientesPage() {
     if (perfilAtivo) pacienteStore.set({ id: Number(perfilAtivo.id), nome: perfilAtivo.nome });
     navigate('/dashboard/odontograma');
   };
-  const { abrirProntuario } = useProntuarioFloat();
-  // Abre o prontuário do paciente do perfil como janela flutuante (triagem, evolução,
-  // exames, receituário, atestado) — sem sair da tela de Pacientes.
+  // Abre o Prontuário Eletrônico numa nova aba do navegador, na tela de seleção de
+  // paciente (não pré-seleciona o do perfil atual) — assim quem estava vendo o
+  // perfil continua na mesma aba, e o prontuário roda em tela cheia na outra.
   const irProntuario = () => {
-    if (perfilAtivo) pacienteStore.set({ id: Number(perfilAtivo.id), nome: perfilAtivo.nome });
     setModalConsultaOpen(false);
-    abrirProntuario();
+    window.open('/dashboard/prontuario', '_blank');
   };
   const [modalConsultaOpen, setModalConsultaOpen] = useState(false);
   const [perfilTab, setPerfilTab] = useState('historico');
