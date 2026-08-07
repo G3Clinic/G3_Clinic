@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Users, Search, UserPlus, Edit, FileText, Trash2, ArrowLeft, Calendar, Activity, Stethoscope, Camera, ClipboardList, Pill, AlertTriangle, Save, X, Upload, ImageIcon, Loader2, DollarSign } from 'lucide-react';
 import { PageHeader, Card, Btn, Modal, InputField, SelectField, Badge } from '../../../components/ui/shared';
 import { useNavigate } from 'react-router-dom';
-import { cidApi, memedApi, consultasApi, pacientesApi, filiaisApi, orcamentosApi, configApi, uploadArquivo, pacienteStore, type CIDItem, type APIPaciente, type APIFilial, type APIConsulta, type APIOrcamento } from '../../../services/api';
+import { cidApi, memedApi, consultasApi, pacientesApi, filiaisApi, orcamentosApi, configApi, uploadArquivo, pacienteStore, atendimentosClinicosApi, evolucoesApi, type CIDItem, type APIPaciente, type APIFilial, type APIConsulta, type APIOrcamento, type APIEvolucao } from '../../../services/api';
 import { cpfValido, formatarCpf } from '../../../utils/cpf';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
@@ -304,8 +304,11 @@ export function PacientesPage() {
   const [consultaSalva, setConsultaSalva] = useState(false);
   const [consultaSalvando, setConsultaSalvando] = useState(false);
 
-  // ── Histórico Clínico (consultas reais) ──────────────
+  // ── Histórico Clínico (consultas reais, usado só p/ Histórico de CIDs) ──
   const [consultas, setConsultas] = useState<APIConsulta[]>([]);
+
+  // ── Histórico Clínico exibido na aba (evoluções reais do Prontuário) ──
+  const [evolucoesHistorico, setEvolucoesHistorico] = useState<APIEvolucao[]>([]);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
 
   // ── Orçamentos do paciente ───────────────────────────
@@ -327,10 +330,29 @@ export function PacientesPage() {
     if (!perfilAtivo) return;
     const pid = Number(perfilAtivo.id);
 
-    setLoadingHistorico(true);
     consultasApi.listarPorPaciente(pid)
       .then(setConsultas)
-      .catch(() => setConsultas([]))
+      .catch(() => setConsultas([]));
+
+    // Histórico Clínico real = evoluções do atendimento contínuo do paciente no
+    // Prontuário (mesma fonte que ProntuarioPage.abrirProntuario usa para achar/criar
+    // o atendimento). Antes esta aba lia a tabela legada "consultas" (Consulta Direta),
+    // que não é onde o atendimento pelo Prontuário grava — por isso ficava vazia/errada
+    // mesmo com evoluções já salvas.
+    setLoadingHistorico(true);
+    atendimentosClinicosApi.listar()
+      .then(todosAtd => {
+        const doPaciente = todosAtd.filter(a => a.paciente_id === pid);
+        if (doPaciente.length === 0) return [];
+        const atendimentoIds = new Set(doPaciente.map(a => a.id));
+        return evolucoesApi.listar().then(todasEvo =>
+          todasEvo
+            .filter(e => e.atendimento_id != null && atendimentoIds.has(e.atendimento_id))
+            .sort((a, b) => (b.criado_em || '').localeCompare(a.criado_em || ''))
+        );
+      })
+      .then(setEvolucoesHistorico)
+      .catch(() => setEvolucoesHistorico([]))
       .finally(() => setLoadingHistorico(false));
 
     setLoadingOrcamentos(true);
@@ -858,48 +880,31 @@ export function PacientesPage() {
                     <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
                       <Loader2 size={18} className="animate-spin" /> Carregando histórico...
                     </div>
-                  ) : consultas.length === 0 ? (
+                  ) : evolucoesHistorico.length === 0 ? (
                     <div className="text-center py-12">
                       <Stethoscope size={48} className="text-slate-300 mx-auto mb-3" />
-                      <h4 className="text-slate-500 font-bold">Nenhuma consulta registrada</h4>
-                      <p className="text-sm text-slate-400 mt-1">As consultas realizadas aparecerão aqui.</p>
-                      <Btn size="sm" icon={Stethoscope} className="mt-4" onClick={() => setPerfilTab('nova_consulta')}>Iniciar Consulta</Btn>
+                      <h4 className="text-slate-500 font-bold">Nenhuma evolução registrada</h4>
+                      <p className="text-sm text-slate-400 mt-1">As evoluções salvas no Prontuário Eletrônico aparecerão aqui.</p>
+                      <Btn size="sm" icon={Stethoscope} className="mt-4" onClick={irProntuario}>Abrir Prontuário</Btn>
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {consultas.map(c => (
-                        <div key={c.id} className="relative pl-6 border-l-2 border-brand-primary/30">
+                      {evolucoesHistorico.map(e => (
+                        <div key={e.id} className="relative pl-6 border-l-2 border-brand-primary/30">
                           <span className="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-brand-primary border-2 border-white shadow-sm" />
                           <div className="p-4 rounded-2xl bg-white border border-gray-100 shadow-sm">
                             <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                               <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                                 <Stethoscope size={15} className="text-brand-primary" />
-                                {c.motivo || 'Consulta'}
+                                Evolução Clínica
                               </h4>
                               <time className="text-[10px] font-bold text-brand-primary bg-brand-light px-2 py-0.5 rounded-full">
-                                {c.data_hora ? new Date(c.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                                {e.criado_em ? new Date(e.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}
                               </time>
                             </div>
-                            {c.cid && (
-                              <p className="text-xs mb-2">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-700 font-bold rounded border border-red-100">
-                                  {c.cid}{c.cid_descricao ? ` — ${c.cid_descricao}` : ''}
-                                </span>
-                              </p>
-                            )}
-                            {c.historico && (
+                            {e.texto_evolucao && (
                               <div className="text-sm text-slate-600 bg-gray-50 p-3 rounded-lg border border-gray-100 prose prose-sm max-w-none [&_h3]:text-sm [&_h3]:font-bold [&_ol]:list-decimal [&_ol]:pl-5"
-                                   dangerouslySetInnerHTML={{ __html: c.historico }} />
-                            )}
-                            {c.prescricoes && c.prescricoes.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {c.prescricoes.map(p => p.link_receita && (
-                                  <a key={p.id} href={p.link_receita} target="_blank" rel="noopener noreferrer"
-                                     className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg hover:bg-emerald-100">
-                                    <Pill size={12} /> Receita digital
-                                  </a>
-                                ))}
-                              </div>
+                                   dangerouslySetInnerHTML={{ __html: e.texto_evolucao }} />
                             )}
                           </div>
                         </div>
