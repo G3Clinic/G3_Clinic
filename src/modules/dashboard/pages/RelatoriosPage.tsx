@@ -120,28 +120,29 @@ export function RelatoriosPage() {
   const finalizadosF = agsF.filter(a => a.status === 'Finalizado');
   const totalRepasses = finalizadosF.reduce((s, a) => s + repasseDe(a), 0);
   
-  // Comissão das Recepcionistas (aproximação para o período)
-  // Como a regra pode ser Fixo ou % por consulta, vamos simplificar aplicando a regra 
-  // aos agendamentos finalizados do período criados pela recepcionista.
-  // No modelo atual, repassesRecep tem 'tipo', 'valor', 'status'.
-  // Para valores fixos (mensais), somamos proporcional ou o total se o filtro for maior que um mês (aqui simplificado).
+  // Comissão das Recepcionistas — 3 tipos possíveis (Regras de Repasse):
+  //  • "Percentual por Consulta": % sobre o valor cobrado de cada consulta que ELA agendou.
+  //  • "Valor Fixo por Consulta": R$ fixo × nº de consultas que ela agendou.
+  //  • "Valor Fixo Mensal": valor fixo lançado manualmente (não depende de volume).
+  // "quem agendou" vem de criado_por (gravado no momento da criação em Agenda — agendamentos
+  // antigos, de antes dessa gravação existir, não têm criado_por e por isso não entram nas
+  // regras "por Consulta": não sabemos de quem foram, e ATRIBUIR PRA TODO MUNDO — como o
+  // código fazia antes — inflava a comissão de cada recepcionista com o total de TODA a
+  // clínica. Preferível subcontar (e o dono perceber e corrigir manualmente) a inflar.
   let totalComissaoRecep = 0;
   repassesRecep.forEach(r => {
-    // Caso criado_por seja nulo (legado) ou corresponda à recepcionista
-    const doRecep = finalizadosF.filter(a => !a.criado_por || a.criado_por === r.recepcionista_id);
-    
-    if (r.tipo?.includes('Percentual')) {
-       const faturadoRecep = doRecep.reduce((s, a) => s + (a.valor_cobrado || 0), 0);
-       if (r.status === 'Pago' || r.status === 'Pendente') {
-         totalComissaoRecep += (faturadoRecep * (r.valor || 0)) / 100;
-       }
-    } else if (r.tipo?.includes('por Consulta') && r.tipo?.includes('Fixo')) {
-       if (r.status === 'Pago' || r.status === 'Pendente') {
-         totalComissaoRecep += doRecep.length * (r.valor || 0);
-       }
-    } else {
-       // Valor fixo mensal
-       totalComissaoRecep += r.valor || 0;
+    const tipo = r.tipo || '';
+    const valor = r.valor || 0;
+    if (tipo.includes('por Consulta')) {
+      const doRecep = finalizadosF.filter(a => a.criado_por && a.criado_por === r.recepcionista_id);
+      if (tipo.includes('Percentual')) {
+        totalComissaoRecep += doRecep.reduce((s, a) => s + (a.valor_cobrado || 0) * (valor / 100), 0);
+      } else {
+        totalComissaoRecep += doRecep.length * valor;
+      }
+    } else if (r.status === 'Pago' || r.status === 'Pendente') {
+      // Valor Fixo Mensal
+      totalComissaoRecep += valor;
     }
   });
 

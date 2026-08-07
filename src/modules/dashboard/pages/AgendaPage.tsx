@@ -6,6 +6,7 @@ import {
   type APIAgendamento, type APIPaciente, type APISala, type APIProcedimento, type APIConvenio, type APIUsuario,
 } from '../../../services/api';
 import { cpfValido, formatarCpf } from '../../../utils/cpf';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const HORARIOS = Array.from({ length: 14 }, (_, i) => `${(i + 7).toString().padStart(2, '0')}:00`);
 const DIAS_LABEL = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex'];
@@ -102,6 +103,7 @@ const FORM_VAZIO: Form = {
 };
 
 export function AgendaPage() {
+  const { user } = useAuth();
   const [visao, setVisao] = useState<Visao>('semana');
   const [cursor, setCursor] = useState(() => new Date());
   const semana = segundaFeira(cursor);
@@ -388,7 +390,9 @@ export function AgendaPage() {
         observacoes: form.observacoes || undefined,
       };
       if (editandoId) await agendamentosApi.atualizar(editandoId, payload);
-      else await agendamentosApi.criar(payload);
+      // criado_por só é gravado na criação — usado pra apurar a comissão da
+      // recepcionista em Relatórios (por consulta) por quem realmente agendou.
+      else await agendamentosApi.criar({ ...payload, criado_por: user?.id });
       setModal(false); carregarAg();
     } catch (e) { setErro(e instanceof Error ? e.message : 'Erro ao salvar agendamento.'); }
     finally { setSalvando(false); }
