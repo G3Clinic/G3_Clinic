@@ -404,9 +404,34 @@ export const caixaApi = {
     apiFetch<{ ok: boolean; data_fechamento: string; total_arrecadado: number; fechamento_origem: string; abertura_origem: string }>('/api/caixa/fechar', { method: 'POST', body: JSON.stringify({ origem }) }),
 };
 
+export interface APIFechamentoCaixa {
+  id: string;
+  data_fechamento: string;
+  valor_total: number;
+  status: string;
+}
 export const fechamentosApi = {
   gerar: (medico_id: string, data_fechamento: string) =>
     apiFetch<{ message: string; fechamento_id: string }>('/fechamentos/gerar', { method: 'POST', body: JSON.stringify({ medico_id, data_fechamento }) }),
+  pendentes: () => apiFetch<APIFechamentoCaixa[]>('/fechamentos/pendentes'),
+  confirmar: (id: string, senha: string) =>
+    apiFetch<{ message: string; hash: string }>(`/fechamentos/${id}/confirmar`, { method: 'POST', body: JSON.stringify({ senha }) }),
+  // PDF exige o header Authorization — não dá pra abrir a URL direto (window.open não manda headers).
+  baixarPdf: async (id: string) => {
+    const token = tokenStore.get();
+    const filial = filialStore.get();
+    const res = await fetch(`${API_BASE}/fechamentos/${id}/pdf`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(filial ? { 'X-Filial-Id': filial } : {}),
+      },
+    });
+    if (!res.ok) throw new Error('Não foi possível baixar o PDF do fechamento.');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  },
 };
 
 // Recepção laboratorial
