@@ -16,6 +16,8 @@ import { EstoquePage } from './modules/dashboard/pages/EstoquePage';
 import { RelatoriosPage } from './modules/dashboard/pages/RelatoriosPage';
 import { FinDashboardPage } from './modules/dashboard/pages/FinDashboardPage';
 import { RecebimentosPage } from './modules/dashboard/pages/RecebimentosPage';
+import { ContasPagarPage } from './modules/dashboard/pages/ContasPagarPage';
+import { DespesasPage } from './modules/dashboard/pages/DespesasPage';
 import { AuditoriaPage } from './modules/dashboard/pages/AuditoriaPage';
 import { AdminCadastroPage } from './modules/dashboard/pages/AdminCadastroPage';
 import { AdminControlePage } from './modules/dashboard/pages/AdminControlePage';
@@ -67,6 +69,8 @@ function App() {
           <Route path="relatorios" element={<RelatoriosPage />} />
           <Route path="financeiro" element={<FinDashboardPage />} />
           <Route path="financeiro/recebimentos" element={<RecebimentosPage />} />
+          <Route path="financeiro/contas-pagar" element={<ContasPagarPage />} />
+          <Route path="financeiro/despesas" element={<DespesasPage />} />
           {/* Log geral de auditoria — fora do Financeiro (rota antiga redireciona) */}
           <Route path="auditoria" element={<AuditoriaPage />} />
           <Route path="financeiro/auditoria" element={<Navigate to="/dashboard/auditoria" replace />} />

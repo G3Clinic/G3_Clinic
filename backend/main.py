@@ -47,10 +47,12 @@ def _startup():
 # Rotas de autenticação e administração (registro, login, delegação).
 from app.fechamentos_routes import router as fechamentos_router
 from app.relatorios_financeiros import router as relatorios_financeiros_router
+from app.financeiro_routes import router as financeiro_router
 
 app.include_router(auth_router)
 app.include_router(fechamentos_router)
 app.include_router(relatorios_financeiros_router)
+app.include_router(financeiro_router)
 
 # CRUD completo, multi-tenant e protegido por módulo, de todas as tabelas.
 for _model, _prefix, _modulo in clinica_models.CRUD_MODELS:

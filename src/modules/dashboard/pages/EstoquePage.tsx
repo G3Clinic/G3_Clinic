@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Package, Plus, Search, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, FolderTree, Box, ArrowRightLeft, ShoppingCart, Link2, Users, Edit, Trash2 } from 'lucide-react';
+import { Package, Plus, Search, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, FolderTree, Box, ArrowRightLeft, ShoppingCart, Link2, Users, Edit, Trash2, Send } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import {
   estoqueCategoriasApi, estoqueProdutosApi, estoqueFornecedoresApi, estoqueMovApi, estoquePedidosApi,
-  procMateriaisApi, odontoProcApi, estoqueApi,
+  procMateriaisApi, odontoProcApi, estoqueApi, enviarPedidoAoFinanceiro,
   type APIEstoqueCategoria, type APIEstoqueProduto, type APIEstoqueFornecedor, type APIEstoqueMov,
   type APIEstoquePedido, type APIProcMaterial, type APIOdontoProc, type APISaldo,
 } from '../../../services/api';
@@ -98,6 +98,11 @@ export function EstoquePage() {
     if (!ped.fornecedor_id) return alert('Selecione o fornecedor.');
     try { await estoquePedidosApi.criar({ fornecedor_id: ped.fornecedor_id, itens_texto: ped.itens_texto || undefined, custo_estimado: ped.custo_estimado ? Number(ped.custo_estimado) : undefined, status: 'PENDENTE' }); setModalPedido(false); setPed({ fornecedor_id: '', itens_texto: '', custo_estimado: '' }); carregar(); }
     catch (e) { alert(e instanceof Error ? e.message : 'Erro.'); }
+  };
+  // Manda o pedido pro Financeiro aprovar e pagar — vira Conta a Pagar vinculada.
+  const enviarAoFinanceiro = async (pd: APIEstoquePedido) => {
+    try { await enviarPedidoAoFinanceiro(pd.id); carregar(); }
+    catch (e) { alert(e instanceof Error ? e.message : 'Erro ao enviar ao financeiro.'); }
   };
   const salvarVinculo = async () => {
     if (!vinc.procedimento_id || !vinc.produto_id) return alert('Procedimento e material obrigatórios.');
@@ -238,8 +243,16 @@ export function EstoquePage() {
                   <td className="px-4 py-3 text-slate-500">{pd.criado_em ? new Date(pd.criado_em).toLocaleDateString('pt-BR') : '—'}</td>
                   <td className="px-4 py-3 font-medium text-slate-700">{nomeForn(pd.fornecedor_id)}</td><td className="px-4 py-3 text-slate-500 max-w-xs truncate">{pd.itens_texto || '—'}</td>
                   <td className="px-4 py-3 text-right font-mono">{pd.custo_estimado != null ? `R$ ${pd.custo_estimado.toFixed(2)}` : '—'}</td>
-                  <td className="px-4 py-3"><Badge color={pd.status === 'RECEBIDO' ? 'green' : pd.status === 'CANCELADO' ? 'gray' : 'yellow'}>{pd.status}</Badge></td>
-                  <td className="px-4 py-3"><button onClick={() => del(() => estoquePedidosApi.excluir(pd.id))} className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg opacity-0 group-hover:opacity-100"><Trash2 size={14} /></button></td></tr>))}
+                  <td className="px-4 py-3"><Badge color={pd.status === 'RECEBIDO' ? 'green' : pd.status === 'CANCELADO' ? 'gray' : pd.status === 'AGUARDANDO_FINANCEIRO' ? 'blue' : 'yellow'}>{pd.status === 'AGUARDANDO_FINANCEIRO' ? 'Aguardando Financeiro' : pd.status}</Badge></td>
+                  <td className="px-4 py-3"><div className="flex gap-1 items-center">
+                    {pd.status === 'PENDENTE' && (
+                      <button onClick={() => enviarAoFinanceiro(pd)} title="Enviar ao Financeiro (vira Conta a Pagar)"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg px-2 py-1">
+                        <Send size={13} /> Enviar ao Financeiro
+                      </button>
+                    )}
+                    <button onClick={() => del(() => estoquePedidosApi.excluir(pd.id))} className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg opacity-0 group-hover:opacity-100"><Trash2 size={14} /></button>
+                  </div></td></tr>))}
             </tbody></table></div></Card>
         )}
 

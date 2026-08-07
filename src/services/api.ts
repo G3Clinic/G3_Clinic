@@ -401,6 +401,26 @@ export function baixarRecebimento(id: string, forma_pagamento?: string) {
     `/api/recebimentos/${id}/baixar`, { method: 'POST', body: JSON.stringify({ forma_pagamento }) });
 }
 
+// Contas a Pagar
+export interface APIContaPagar {
+  id: string; unidade_id?: number | null; descricao?: string | null; valor?: number | null;
+  data_vencimento?: string | null; fornecedor?: string | null; status?: string | null;
+  pedido_id?: string | null; data_pagamento?: string | null; observacoes?: string | null;
+  aprovado_por?: string | null;
+}
+export const contasPagarApi = crudApi<APIContaPagar>('financeiro_contas_pagar');
+export function aprovarContaPagar(id: string) {
+  return apiFetch<{ ok: boolean; status: string }>(`/api/financeiro/contas-pagar/${id}/aprovar`, { method: 'POST' });
+}
+export function pagarContaPagar(id: string, forma_pagamento?: string) {
+  return apiFetch<{ ok: boolean; ja_pago: boolean; caixa_lancamento_id?: string }>(
+    `/api/financeiro/contas-pagar/${id}/pagar`, { method: 'POST', body: JSON.stringify({ forma_pagamento }) });
+}
+// Manda um pedido de compra do Estoque para o Financeiro aprovar/pagar (vira Conta a Pagar vinculada).
+export function enviarPedidoAoFinanceiro(pedidoId: string) {
+  return apiFetch<{ ok: boolean; conta_pagar_id: string }>(`/api/financeiro/estoque-pedidos/${pedidoId}/enviar`, { method: 'POST' });
+}
+
 // Caixa do dia — abrir/fechar turno (hora + origem automático/manual)
 export const caixaApi = {
   turnoAberto: () => apiFetch<{ aberto: boolean; id?: string; data_abertura?: string; abertura_origem?: string }>('/api/caixa/turno-aberto'),

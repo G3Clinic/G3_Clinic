@@ -208,7 +208,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           {temPermissao('financeiro') && (
             <NavGroup icon={DollarSign} label="Financeiro" defaultOpen={false} isCollapsed={isCollapsed} onExpand={() => setIsCollapsed(false)}>
               <SubNavItem label="Dashboard" to="/dashboard/financeiro" />
-              <SubNavItem label="Recebimentos" to="/dashboard/financeiro/recebimentos" />
+              <SubNavItem label="Contas a Receber" to="/dashboard/financeiro/recebimentos" />
+              <SubNavItem label="Contas a Pagar" to="/dashboard/financeiro/contas-pagar" />
+              <SubNavItem label="Despesas" to="/dashboard/financeiro/despesas" />
             </NavGroup>
           )}
 
@@ -226,7 +228,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               <SubNavItem label="Atendimentos" to="/dashboard/admin/atendimentos" />
               <SubNavItem label="Proc. Odontológicos" to="/dashboard/admin/odonto-proc" />
               <SubNavItem label="Convênios" to="/dashboard/admin/convenios" />
-              <SubNavItem label="Custos & Laboratório" to="/dashboard/admin/dre" />
+              <SubNavItem label="Tabela de Laboratório" to="/dashboard/admin/dre" />
               <SubNavItem label="Repasses Recepcionistas" to="/dashboard/admin/repasse-recep" />
               <SubNavItem label="Registro de Atividades (Log)" to="/dashboard/auditoria" />
             </NavGroup>
