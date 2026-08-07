@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Plus, Edit2, Trash2, Save, KeyRound, Check, AlertTriangle, Search } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Save, KeyRound, Check, AlertTriangle, Search, UserX, UserCheck } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import { usuariosApi, filiaisApi, permissoesApi, type APIUsuario, type APIFilial } from '../../../services/api';
 
@@ -197,6 +197,17 @@ export function AdminCadastroPage() {
     catch (e) { alert(e instanceof Error ? e.message : 'Erro ao excluir.'); }
   };
 
+  // Ativar/desativar acesso — diferente de excluir: mantém o cadastro (histórico, vínculos)
+  // e só bloqueia o login (o backend já rejeita login de usuário com ativo=false).
+  const alternarAtivo = async (u: APIUsuario) => {
+    const estaAtivo = u.ativo !== false;
+    if (estaAtivo && !confirm(`Desativar o acesso de "${u.nome}"? Ele(a) não conseguirá mais fazer login. O cadastro é mantido e pode ser reativado depois.`)) return;
+    try {
+      await usuariosApi.atualizar(u.id, { ativo: !estaAtivo });
+      carregar();
+    } catch (e) { alert(e instanceof Error ? e.message : `Erro ao ${estaAtivo ? 'desativar' : 'reativar'} usuário.`); }
+  };
+
   const iniciais = (nome: string) => nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
 
   const renderPermissoes = () => (
@@ -307,6 +318,11 @@ export function AdminCadastroPage() {
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button onClick={() => abrirEdit(u)} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-light rounded-lg" title="Editar Usuário"><Edit2 size={14} /></button>
                       <button onClick={() => abrirSenha(u)} className="p-1.5 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg" title="Trocar Senha"><KeyRound size={14} /></button>
+                      {!u.is_dono && (
+                        u.ativo === false
+                          ? <button onClick={() => alternarAtivo(u)} className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg" title="Reativar Usuário"><UserCheck size={14} /></button>
+                          : <button onClick={() => alternarAtivo(u)} className="p-1.5 text-slate-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg" title="Desativar Usuário"><UserX size={14} /></button>
+                      )}
                       {!u.is_dono && <button onClick={() => { setSelectedUser(u); setDeleteModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title="Excluir Usuário"><Trash2 size={14} /></button>}
                     </div>
                   </td>
