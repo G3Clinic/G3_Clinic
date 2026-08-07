@@ -18,7 +18,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Column, Integer, String, Text, Boolean, Float, Date, DateTime, JSON,
-    ForeignKey, func
+    ForeignKey, func, LargeBinary
 )
 
 from .database import Base
@@ -688,8 +688,9 @@ class FechamentoCaixa(Base, TenantMixin):
     status = Column(String(20), default="PENDENTE")
     observacao_contestacao = Column(Text, nullable=True)
     hash_documento = Column(String(64), nullable=True)
-    pdf_path = Column(String(255), nullable=True)
-    
+    pdf_path = Column(String(255), nullable=True)  # legado — não usar mais (disco do Railway é efêmero)
+    pdf_bytes = Column(LargeBinary, nullable=True)  # o PDF assinado fica salvo no banco, não em arquivo local
+
     criado_em = Column(DateTime, default=func.now())
     atualizado_em = Column(DateTime, default=func.now(), onupdate=func.now())
 

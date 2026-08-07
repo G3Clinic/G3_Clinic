@@ -1,8 +1,7 @@
 from typing import List
 from datetime import datetime, date
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.orm import Session
-from fastapi.responses import FileResponse
 
 from . import clinica_models as cm
 from . import tenant_models as tm
@@ -135,20 +134,20 @@ def confirmar_fechamento(
         cm.FechamentoCaixaItem.fechamento_id == fechamento.id
     ).all()
     
-    # Gerar PDF
-    filepath, hash_pdf = gerar_pdf_fechamento(
+    # Gerar PDF — em memória, guardado no banco (o disco do container é efêmero)
+    pdf_bytes, hash_pdf = gerar_pdf_fechamento(
         fechamento=fechamento,
         itens=itens,
         assinatura_medico=assinatura_medico,
         assinatura_recepcao=assinatura_recepcao
     )
-    
+
     fechamento.status = "CONFIRMADO"
     fechamento.hash_documento = hash_pdf
-    fechamento.pdf_path = filepath
-    
+    fechamento.pdf_bytes = pdf_bytes
+
     db.commit()
-    
+
     return {"message": "Fechamento confirmado com sucesso", "hash": hash_pdf}
 
 @router.get("/{fechamento_id}/pdf")
@@ -161,8 +160,12 @@ def baixar_pdf(
         cm.FechamentoCaixa.id == fechamento_id,
         cm.FechamentoCaixa.empresa_id == user.empresa_id
     ).first()
-    
-    if not fechamento or not fechamento.pdf_path:
-        raise HTTPException(status_code=404, detail="PDF não encontrado")
-        
-    return FileResponse(fechamento.pdf_path, media_type="application/pdf", filename=f"fechamento_{fechamento_id}.pdf")
+
+    if not fechamento or not fechamento.pdf_bytes:
+        raise HTTPException(status_code=404, detail="PDF não encontrado. Se este fechamento foi assinado antes desta atualização, peça ao profissional para assinar novamente.")
+
+    return Response(
+        content=fechamento.pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="fechamento_{fechamento_id}.pdf"'},
+    )

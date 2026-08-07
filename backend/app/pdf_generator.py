@@ -1,4 +1,4 @@
-import os
+import io
 import hashlib
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
@@ -7,14 +7,12 @@ from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-def gerar_pdf_fechamento(fechamento, itens, assinatura_medico, assinatura_recepcao, output_dir="uploads/recibos"):
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    
-    filename = f"fechamento_{fechamento.id}.pdf"
-    filepath = os.path.join(output_dir, filename)
-    
-    doc = SimpleDocTemplate(filepath, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+def gerar_pdf_fechamento(fechamento, itens, assinatura_medico, assinatura_recepcao):
+    """Gera o PDF em memória e retorna (bytes, hash_sha256) — nada é escrito em
+    disco. O disco do container (Railway) é efêmero: some a cada reimplantação,
+    então o arquivo precisa viver no banco (fechamento.pdf_bytes), não no filesystem."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     styles = getSampleStyleSheet()
     
     title_style = ParagraphStyle(
@@ -85,9 +83,8 @@ def gerar_pdf_fechamento(fechamento, itens, assinatura_medico, assinatura_recepc
     elements.append(Paragraph("<font size=8>Assinado eletronicamente nos termos do art. 10, §2º da MP 2.200-2/2001.</font>", normal_style))
     
     doc.build(elements)
-    
-    # Calculate file hash
-    with open(filepath, "rb") as f:
-        file_hash = hashlib.sha256(f.read()).hexdigest()
-        
-    return filepath, file_hash
+
+    pdf_bytes = buffer.getvalue()
+    file_hash = hashlib.sha256(pdf_bytes).hexdigest()
+
+    return pdf_bytes, file_hash
