@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { useProntuarioFloat } from './contexts/ProntuarioFloatContext';
 import { LoginPage } from './modules/auth/pages/LoginPage';
 import { DashboardLayout } from './modules/dashboard/layouts/DashboardLayout';
 import { HomePage } from './modules/dashboard/pages/HomePage';
@@ -8,7 +10,6 @@ import { PacientesPage } from './modules/dashboard/pages/PacientesPage';
 import { EstatisticasPacientesPage } from './modules/dashboard/pages/EstatisticasPacientesPage';
 import { AgendaPage } from './modules/dashboard/pages/AgendaPage';
 import { RecepcaoPage } from './modules/dashboard/pages/RecepcaoPage';
-import { ProntuarioPage } from './modules/dashboard/pages/ProntuarioPage';
 import { OdontogramaPage } from './modules/dashboard/pages/OdontogramaPage';
 import { CaixaPage } from './modules/dashboard/pages/CaixaPage';
 import { FechamentosPage } from './modules/dashboard/pages/FechamentosPage';
@@ -30,6 +31,21 @@ import { AdminRepasseRecepPage } from './modules/dashboard/pages/AdminRepasseRec
 import { AdminBackupPage } from './modules/dashboard/pages/AdminBackupPage';
 import { AdminNotificacoesPage } from './modules/dashboard/pages/AdminNotificacoesPage';
 import { MeuPerfilPage } from './modules/dashboard/pages/MeuPerfilPage';
+
+// O Prontuário Eletrônico virou janela flutuante/minimizável (ProntuarioFloatWindow,
+// montada em DashboardLayout) em vez de página cheia. Isso preserva links antigos e o
+// atalho do teclado/histórico que apontam pra /dashboard/prontuario: só abre a janela
+// flutuante e volta pro dashboard, sem quebrar quem tinha essa URL salva.
+function AbrirProntuarioFlutuante() {
+  const { abrirProntuario } = useProntuarioFloat();
+  const navigate = useNavigate();
+  useEffect(() => {
+    abrirProntuario();
+    navigate('/dashboard', { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+}
 
 /** Protege rotas: sem sessão → redireciona ao login. */
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -59,7 +75,7 @@ function App() {
           <Route path="estatisticas-pacientes" element={<EstatisticasPacientesPage />} />
           <Route path="agenda" element={<AgendaPage />} />
           <Route path="recepcao" element={<RecepcaoPage />} />
-          <Route path="prontuario" element={<ProntuarioPage />} />
+          <Route path="prontuario" element={<AbrirProntuarioFlutuante />} />
           <Route path="odontograma" element={<OdontogramaPage />} />
           <Route path="caixa" element={<CaixaPage />} />
           <Route path="fechamentos" element={<FechamentosPage />} />
