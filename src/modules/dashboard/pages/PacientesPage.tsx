@@ -97,6 +97,9 @@ function apiParaPaciente(p: APIPaciente): Paciente {
   };
 }
 
+const resumoEvolucao = (html: string) =>
+  html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || 'Evolução clínica';
+
 export function PacientesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [busca, setBusca] = useState('');
@@ -310,6 +313,7 @@ export function PacientesPage() {
   // ── Histórico Clínico exibido na aba (evoluções reais do Prontuário) ──
   const [evolucoesHistorico, setEvolucoesHistorico] = useState<APIEvolucao[]>([]);
   const [loadingHistorico, setLoadingHistorico] = useState(false);
+  const [evolucaoAberta, setEvolucaoAberta] = useState<APIEvolucao | null>(null);
 
   // ── Orçamentos do paciente ───────────────────────────
   const [orcamentos, setOrcamentos] = useState<APIOrcamento[]>([]);
@@ -892,7 +896,10 @@ export function PacientesPage() {
                       {evolucoesHistorico.map(e => (
                         <div key={e.id} className="relative pl-6 border-l-2 border-brand-primary/30">
                           <span className="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-brand-primary border-2 border-white shadow-sm" />
-                          <div className="p-4 rounded-2xl bg-white border border-gray-100 shadow-sm">
+                          <button
+                            onClick={() => setEvolucaoAberta(e)}
+                            className="w-full text-left p-4 rounded-2xl bg-white border border-gray-100 shadow-sm hover:border-brand-primary/40 hover:bg-brand-light/10 transition-colors"
+                          >
                             <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                               <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                                 <Stethoscope size={15} className="text-brand-primary" />
@@ -903,10 +910,9 @@ export function PacientesPage() {
                               </time>
                             </div>
                             {e.texto_evolucao && (
-                              <div className="text-sm text-slate-600 bg-gray-50 p-3 rounded-lg border border-gray-100 prose prose-sm max-w-none [&_h3]:text-sm [&_h3]:font-bold [&_ol]:list-decimal [&_ol]:pl-5"
-                                   dangerouslySetInnerHTML={{ __html: e.texto_evolucao }} />
+                              <p className="text-xs text-slate-500 truncate mt-0.5">{resumoEvolucao(e.texto_evolucao)}</p>
                             )}
-                          </div>
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1253,6 +1259,17 @@ export function PacientesPage() {
 
       {renderModalPaciente()}
       {renderModalConsulta()}
+
+      <Modal
+        open={!!evolucaoAberta}
+        onClose={() => setEvolucaoAberta(null)}
+        title={evolucaoAberta?.criado_em ? `Evolução Clínica — ${new Date(evolucaoAberta.criado_em).toLocaleString('pt-BR')}` : 'Evolução Clínica'}
+      >
+        {evolucaoAberta?.texto_evolucao && (
+          <div className="text-sm text-slate-700 prose prose-sm max-w-none prose-hr:my-2 prose-p:my-1.5 [&_h3]:text-sm [&_h3]:font-bold [&_ol]:list-decimal [&_ol]:pl-5"
+               dangerouslySetInnerHTML={{ __html: evolucaoAberta.texto_evolucao }} />
+        )}
+      </Modal>
     </div>
   );
 
