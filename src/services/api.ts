@@ -369,7 +369,7 @@ export function finalizarAtendimento(agendamentoId: string) {
 // Custos operacionais (DRE)
 export interface APICusto {
   id: string; descricao?: string; categoria?: string | null; frequencia?: string | null;
-  valor?: number | null; status?: string | null;
+  valor?: number | null; status?: string | null; data_lancamento?: string | null;
 }
 export const custosApi = crudApi<APICusto>('custos_operacionais');
 

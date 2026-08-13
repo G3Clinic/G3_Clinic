@@ -16,10 +16,12 @@ export function DespesasPage() {
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
 
+  const hoje = () => new Date().toISOString().slice(0, 10);
   const [descricao, setDescricao] = useState('');
   const [categoria, setCategoria] = useState(CATEGORIAS[0]);
   const [frequencia, setFrequencia] = useState('Mensal');
   const [valor, setValor] = useState('');
+  const [dataLancamento, setDataLancamento] = useState(hoje());
 
   const carregar = useCallback(() => { custosApi.listar().then(setCustos).catch(() => {}); }, []);
   useEffect(() => { carregar(); }, [carregar]);
@@ -30,21 +32,22 @@ export function DespesasPage() {
 
   const abrirNovo = () => {
     setEditId(null); setErro('');
-    setDescricao(''); setCategoria(CATEGORIAS[0]); setFrequencia('Mensal'); setValor('');
+    setDescricao(''); setCategoria(CATEGORIAS[0]); setFrequencia('Mensal'); setValor(''); setDataLancamento(hoje());
     setModal(true);
   };
   const abrirEdit = (c: APICusto) => {
     setEditId(c.id); setErro('');
     setDescricao(c.descricao || ''); setCategoria(c.categoria || CATEGORIAS[0]); setFrequencia(c.frequencia || 'Mensal');
-    setValor(c.valor != null ? String(c.valor) : ''); setModal(true);
+    setValor(c.valor != null ? String(c.valor) : ''); setDataLancamento(c.data_lancamento || hoje()); setModal(true);
   };
 
   const salvar = async () => {
     setErro('');
     if (!descricao.trim()) { setErro('Descrição é obrigatória.'); return; }
+    if (!dataLancamento) { setErro('Informe a data de lançamento — é o que faz essa despesa aparecer no DRE do período certo.'); return; }
     setSalvando(true);
     try {
-      const payload = { descricao: descricao.trim(), categoria, frequencia, valor: valor ? Number(valor) : undefined };
+      const payload = { descricao: descricao.trim(), categoria, frequencia, valor: valor ? Number(valor) : undefined, data_lancamento: dataLancamento };
       if (editId) await custosApi.atualizar(editId, payload); else await custosApi.criar(payload);
       setModal(false); carregar();
     } catch (e) { setErro(e instanceof Error ? e.message : 'Erro ao salvar.'); }
@@ -77,13 +80,14 @@ export function DespesasPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-gray-100">{['Descrição', 'Categoria', 'Valor (R$)', 'Frequência', 'Status', 'Ações'].map(h => <th key={h} className="text-left px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wide">{h}</th>)}</tr></thead>
+            <thead><tr className="border-b border-gray-100">{['Descrição', 'Categoria', 'Valor (R$)', 'Data', 'Frequência', 'Status', 'Ações'].map(h => <th key={h} className="text-left px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wide">{h}</th>)}</tr></thead>
             <tbody className="divide-y divide-gray-50">
-              {filtrada.length === 0 ? <tr><td colSpan={6} className="text-center py-8 text-slate-500">Nenhuma despesa cadastrada.</td></tr> : filtrada.map(c => (
+              {filtrada.length === 0 ? <tr><td colSpan={7} className="text-center py-8 text-slate-500">Nenhuma despesa cadastrada.</td></tr> : filtrada.map(c => (
                 <tr key={c.id} className="hover:bg-slate-50 group">
                   <td className="px-4 py-3 font-medium text-slate-800">{c.descricao}</td>
                   <td className="px-4 py-3"><Badge color={CORES[c.categoria || ''] || 'gray'}>{c.categoria}</Badge></td>
                   <td className="px-4 py-3 font-mono text-slate-600">R$ {(c.valor ?? 0).toFixed(2)}</td>
+                  <td className="px-4 py-3 text-slate-500">{c.data_lancamento ? c.data_lancamento.split('-').reverse().join('/') : '—'}</td>
                   <td className="px-4 py-3 text-slate-500">{c.frequencia}</td>
                   <td className="px-4 py-3"><Badge color="green">{c.status || 'Ativo'}</Badge></td>
                   <td className="px-4 py-3"><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -106,7 +110,10 @@ export function DespesasPage() {
             </SelectField>
             <SelectField label="Frequência" value={frequencia} onChange={e => setFrequencia(e.target.value)}><option>Mensal</option><option>Anual</option><option>Avulso</option></SelectField>
           </div>
-          <InputField label="Valor (R$)" type="number" step="0.01" placeholder="0.00" value={valor} onChange={e => setValor(e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <InputField label="Valor (R$)" type="number" step="0.01" placeholder="0.00" value={valor} onChange={e => setValor(e.target.value)} />
+            <InputField label="Data de Lançamento" type="date" required value={dataLancamento} onChange={e => setDataLancamento(e.target.value)} />
+          </div>
           {erro && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{erro}</div>}
         </div>
         <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100">
