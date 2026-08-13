@@ -381,7 +381,8 @@ export const tabelaLabApi = crudApi<APITabelaLab>('tabela_laboratorio');
 
 // Repasses de recepcionistas
 export interface APIRepasseRecep {
-  id: string; recepcionista_id?: string | null; tipo?: string | null; referencia?: string | null;
+  id: string; recepcionista_id?: string | null; unidade_id?: number | null; tipo?: string | null;
+  referencia?: string | null; competencia?: string | null;
   valor?: number | null; status?: string | null;
 }
 export const repasseRecepApi = crudApi<APIRepasseRecep>('repasses_recepcionistas');

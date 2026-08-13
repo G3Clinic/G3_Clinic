@@ -18,6 +18,7 @@ export function AdminRepasseRecepPage() {
   const [tipo, setTipo] = useState(TIPOS[0]);
   const [valor, setValor] = useState('');
   const [referencia, setReferencia] = useState('');
+  const [competencia, setCompetencia] = useState(''); // "YYYY-MM" — mês a que o Valor Fixo Mensal se refere
   const [status, setStatus] = useState('Pendente');
 
   const carregar = useCallback(() => {
@@ -37,24 +38,45 @@ export function AdminRepasseRecepPage() {
   useEffect(() => { carregar(); }, [carregar]);
 
   const nomeRecep = (id?: string | null) => recepcionistas.find(r => r.id === id)?.nome || '—';
+  const MESES_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const fmtCompetencia = (iso?: string | null) => {
+    if (!iso) return '';
+    const [ano, mes] = iso.split('-');
+    return `${MESES_PT[Number(mes) - 1] || mes}/${ano}`;
+  };
 
-  const abrirNovo = () => { setEditId(null); setRecepId(''); setTipo(TIPOS[0]); setValor(''); setReferencia(''); setStatus('Pendente'); setErro(''); setModal(true); };
+  const abrirNovo = () => { setEditId(null); setRecepId(''); setTipo(TIPOS[0]); setValor(''); setReferencia(''); setCompetencia(''); setStatus('Pendente'); setErro(''); setModal(true); };
   const abrirEdit = (r: APIRepasseRecep) => {
     setEditId(r.id); setRecepId(r.recepcionista_id || ''); setTipo(r.tipo || TIPOS[0]);
-    setValor(r.valor != null ? String(r.valor) : ''); setReferencia(r.referencia || ''); setStatus(r.status || 'Pendente');
+    setValor(r.valor != null ? String(r.valor) : ''); setReferencia(r.referencia || '');
+    setCompetencia(r.competencia ? r.competencia.slice(0, 7) : ''); setStatus(r.status || 'Pendente');
     setErro(''); setModal(true);
   };
 
   const salvar = async () => {
     setErro('');
     if (!recepId) { setErro('Selecione a recepcionista.'); return; }
+    const unidadeAtiva = filialStore.get();
+    if (!unidadeAtiva) {
+      // Sem filial ativa, o registro ficaria sem unidade_id (unidade_id NULL) e passaria a
+      // aparecer somado em TODAS as unidades ao mesmo tempo no DRE (bug que motivou este
+      // fix) — por isso exigimos uma filial específica selecionada no topo pra criar/editar.
+      setErro('Selecione uma unidade específica no topo da tela (não "Todas as unidades") antes de salvar um repasse.');
+      return;
+    }
+    const ehMensal = tipo === 'Valor Fixo Mensal';
+    if (ehMensal && !competencia) { setErro('Informe a competência (mês) deste repasse fixo mensal.'); return; }
     setSalvando(true);
     try {
       // "por Consulta" (Percentual/Fixo) é uma regra de taxa, não um lançamento — não tem
-      // status de pagamento: o valor é aplicado direto quando o paciente paga a consulta
-      // (ver cálculo em Relatórios). Só "Valor Fixo Mensal" tem Pendente/Pago de verdade.
+      // status de pagamento nem competência: o valor é aplicado direto quando o paciente paga
+      // a consulta (ver cálculo em Relatórios). Só "Valor Fixo Mensal" é um lançamento do mês,
+      // por isso é o único tipo com Pendente/Pago e competência de verdade.
       const payload = {
-        recepcionista_id: recepId, tipo, valor: valor ? Number(valor) : undefined, referencia: referencia.trim() || undefined,
+        recepcionista_id: recepId, unidade_id: Number(unidadeAtiva), tipo,
+        valor: valor ? Number(valor) : undefined,
+        referencia: referencia.trim() || (ehMensal ? fmtCompetencia(competencia) : undefined),
+        competencia: ehMensal ? `${competencia}-01` : undefined,
         status: tipo.includes('por Consulta') ? undefined : status,
       };
       if (editId) await repasseRecepApi.atualizar(editId, payload); else await repasseRecepApi.criar(payload);
@@ -126,7 +148,11 @@ export function AdminRepasseRecepPage() {
             {TIPOS.map(t => <option key={t}>{t}</option>)}
           </SelectField>
           <InputField label="Valor (% ou R$)" type="number" step="0.01" placeholder="Ex: 5 ou 800.00" value={valor} onChange={e => setValor(e.target.value)} />
-          <InputField label="Referência (Mês/Ano)" placeholder="Ex: Julho/2025" value={referencia} onChange={e => setReferencia(e.target.value)} />
+          {tipo === 'Valor Fixo Mensal' ? (
+            <InputField label="Competência (mês a que se refere)" type="month" required value={competencia} onChange={e => setCompetencia(e.target.value)} />
+          ) : (
+            <InputField label="Referência (opcional)" placeholder="Ex: a partir de Julho/2025" value={referencia} onChange={e => setReferencia(e.target.value)} />
+          )}
           {!tipo?.includes('por Consulta') && (
             <SelectField label="Status" value={status} onChange={e => setStatus(e.target.value)}><option>Pendente</option><option>Pago</option></SelectField>
           )}

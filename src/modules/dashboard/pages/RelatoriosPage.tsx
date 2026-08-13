@@ -123,12 +123,19 @@ export function RelatoriosPage() {
   // Comissão das Recepcionistas — 3 tipos possíveis (Regras de Repasse):
   //  • "Percentual por Consulta": % sobre o valor cobrado de cada consulta que ELA agendou.
   //  • "Valor Fixo por Consulta": R$ fixo × nº de consultas que ela agendou.
-  //  • "Valor Fixo Mensal": valor fixo lançado manualmente (não depende de volume).
+  //  • "Valor Fixo Mensal": lançamento do mês (tem competência própria).
   // "quem agendou" vem de criado_por (gravado no momento da criação em Agenda — agendamentos
   // antigos, de antes dessa gravação existir, não têm criado_por e por isso não entram nas
   // regras "por Consulta": não sabemos de quem foram, e ATRIBUIR PRA TODO MUNDO — como o
   // código fazia antes — inflava a comissão de cada recepcionista com o total de TODA a
   // clínica. Preferível subcontar (e o dono perceber e corrigir manualmente) a inflar.
+  //
+  // Bug corrigido aqui: "Valor Fixo Mensal" estava sendo somado por inteiro em QUALQUER
+  // período selecionado (Hoje, 7 dias, mês atual...), porque nunca tinha filtro de data —
+  // um repasse de R$800 lançado em janeiro continuava entrando na conta mesmo filtrando
+  // "Hoje" em agosto. Agora só entra se a competência do repasse cair dentro do período do
+  // relatório, igual a todo o resto desta página. Repasses antigos sem competência
+  // registrada (campo não existia antes) não entram em nenhum período até serem reeditados.
   let totalComissaoRecep = 0;
   repassesRecep.forEach(r => {
     const tipo = r.tipo || '';
@@ -140,7 +147,7 @@ export function RelatoriosPage() {
       } else {
         totalComissaoRecep += doRecep.length * valor;
       }
-    } else if (r.status === 'Pago' || r.status === 'Pendente') {
+    } else if (noPeriodo(r.competencia) && (r.status === 'Pago' || r.status === 'Pendente')) {
       // Valor Fixo Mensal
       totalComissaoRecep += valor;
     }
