@@ -63,6 +63,51 @@ export function fecharMemedForcado() {
   window.dispatchEvent(new Event(EVT_FECHADA));
 }
 
+const SELETOR_IFRAMES_MEMED = 'iframe[id^="mdhub-module-"]';
+let vigiaIniciado = false;
+
+/**
+ * Confirmado em produção (inspecionando o DOM ao vivo): a Memed pode deixar
+ * o iframe "mdhub-module-plataforma.prescricao" visível em tela cheia sem
+ * que o NOSSO código tenha chamado module.show — provavelmente ela
+ * restaura sozinha um estado "módulo aberto" persistido (localStorage) ao
+ * carregar a página de novo, depois de uma sessão anterior ter travado sem
+ * fechar direito. Nesse caso "memed-ativa" nunca é ligada por nós, o CSS de
+ * bloqueio nunca entra em ação, e nem o botão de escape aparece — mesmo
+ * com tudo capturando clique.
+ *
+ * Este vigia checa o DOM de verdade (não a nossa intenção de clique) e
+ * sincroniza "memed-ativa" com o que está REALMENTE visível na tela,
+ * então cobre tanto o caminho feliz (nós abrimos) quanto esse caminho em
+ * que a própria Memed reabre por conta própria.
+ *
+ * IMPORTANTE: a checagem usa `el.style.display` (o inline style que a
+ * PRÓPRIA Memed escreve pra mostrar/esconder cada módulo — confirmado ao
+ * vivo: ela sempre deixa width/height em 100%, e alterna só o display
+ * entre "none" e algo tipo "block"), NUNCA `getBoundingClientRect()` ou
+ * `getComputedStyle()` — essas duas ficam contaminadas pelo NOSSO próprio
+ * CSS (que força width/height/opacity a 0 quando memed-ativa está
+ * desligada), e checar o valor computado criaria um cabo de guerra: nosso
+ * CSS esconde antes do vigia (que só roda a cada 800ms) ter chance de ver
+ * o elemento "grande", e memed-ativa nunca ligaria — foi exatamente o bug
+ * que a primeira versão deste vigia tinha.
+ */
+export function iniciarVigiaMemed() {
+  if (vigiaIniciado) return;
+  vigiaIniciado = true;
+  const checar = () => {
+    const algumVisivel = Array.from(document.querySelectorAll<HTMLIFrameElement>(SELETOR_IFRAMES_MEMED))
+      .some(el => el.style.display !== 'none' && el.style.display !== '');
+    const jaMarcada = document.body.classList.contains('memed-ativa');
+    if (algumVisivel && !jaMarcada) marcarAberta();
+    else if (!algumVisivel && jaMarcada) {
+      document.body.classList.remove('memed-ativa');
+      window.dispatchEvent(new Event(EVT_FECHADA));
+    }
+  };
+  setInterval(checar, 800);
+}
+
 export function useMemedAberta(): boolean {
   const [aberta, setAberta] = useState(() => document.body.classList.contains('memed-ativa'));
   useEffect(() => {

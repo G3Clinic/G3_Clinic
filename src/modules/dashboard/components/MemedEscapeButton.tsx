@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { X } from 'lucide-react';
-import { fecharMemedForcado, useMemedAberta } from '../../../hooks/useMemed';
+import { fecharMemedForcado, iniciarVigiaMemed, useMemedAberta } from '../../../hooks/useMemed';
 
 /**
  * Botão de escape global da Memed — sempre montado no layout do dashboard,
@@ -11,9 +12,17 @@ import { fecharMemedForcado, useMemedAberta } from '../../../hooks/useMemed';
  * tela cheia fica bloqueando clique de tudo por trás, sem conteúdo visível
  * e sem jeito de sair — era o travamento reportado. Este botão fecha na
  * marra (fecharMemedForcado), sem depender de nada vindo da Memed.
+ *
+ * Também liga o vigia de DOM (iniciarVigiaMemed): confirmado ao vivo em
+ * produção que a Memed pode reabrir seu iframe sozinha (provavelmente
+ * restaurando um estado salvo dela mesma) sem passar pelo nosso botão
+ * "Abrir Prescrição" — nesse caso "memed-ativa" nunca seria ligada só com
+ * o clique, e nem este botão apareceria. O vigia sincroniza com o que está
+ * de fato visível no DOM, então cobre esse caminho também.
  */
 export function MemedEscapeButton() {
   const aberta = useMemedAberta();
+  useEffect(() => { iniciarVigiaMemed(); }, []);
   if (!aberta) return null;
   return (
     <button

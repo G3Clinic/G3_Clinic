@@ -23,14 +23,18 @@
     background-color: #F8FAFC;
   }
 
-  /* Força a Memed a não bloquear a tela quando não estiver ativa */
-  body:not(.memed-ativa) #md-mac,
-  body:not(.memed-ativa) #md-app-container,
-  body:not(.memed-ativa) .md-hub-overlay,
-  body:not(.memed-ativa) div[id^="md-"] {
+  /* Força a Memed a não bloquear a tela quando não estiver ativa.
+     Os seletores #md-mac / #md-app-container / .md-hub-overlay / div[id^="md-"]
+     das duas tentativas anteriores nunca bateram com nada — inspecionando o DOM
+     real em produção, o elemento que a Memed usa é um IFRAME com id
+     "mdhub-module-<nome-do-módulo>" (ex.: mdhub-module-plataforma.prescricao),
+     não uma div "md-*". Por isso o bloqueio nunca surtia efeito. */
+  body:not(.memed-ativa) iframe[id^="mdhub-module-"] {
     pointer-events: none !important;
     z-index: -9999 !important;
     opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
   }
 }
 
