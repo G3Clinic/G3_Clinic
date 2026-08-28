@@ -86,7 +86,8 @@ export function useMemed() {
         script.type = 'text/javascript';
         script.src = amb.script_url;
         script.setAttribute('data-token', token);
-        document.head.appendChild(script);
+        script.setAttribute('data-color', '#10B981');
+        document.body.appendChild(script);
       }
       const MdHub = await aguardarMdHub();
       // Se o módulo de prescrição já inicializou nesta sessão (ex.: reabrir a aba),
