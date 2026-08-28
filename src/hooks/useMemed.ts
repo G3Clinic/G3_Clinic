@@ -44,6 +44,12 @@ function registrarListenersUmaVez(MdHub: any) {
   MdHub.event.add('prescricaoExcluida', (data: any) => {
     if (data?.id != null) memedApi.excluirPrescricao(data.id).catch(() => {});
   });
+  // ✅ Libera a tela quando a Memed for fechada
+  MdHub.event.add('core:moduleHide', (m: any) => {
+    if (m?.name === 'plataforma.prescricao') {
+      document.body.classList.remove('memed-ativa');
+    }
+  });
 }
 
 const sexoMemed = (s?: string | null) => (s === 'M' ? 'Masculino' : s === 'F' ? 'Feminino' : s || undefined);
@@ -152,10 +158,12 @@ export function useMemed() {
     // module.show é o único comando obrigatório no clique — sempre executado.
     try {
       console.log('[Memed] chamando module.show…');
+      document.body.classList.add('memed-ativa');
       MdHub.module.show('plataforma.prescricao');
       console.log('[Memed] module.show OK');
     } catch (e) {
       console.error('[Memed] erro no module.show:', e);
+      document.body.classList.remove('memed-ativa');
       setErro(e instanceof Error ? e.message : 'Erro ao abrir a prescrição.');
       return;
     }

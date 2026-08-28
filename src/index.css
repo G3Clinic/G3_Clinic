@@ -23,12 +23,14 @@
     background-color: #F8FAFC;
   }
 
-  /* Previne que o container da Memed bloqueie a tela quando estiver invisível */
-  #md-app-container, .md-hub-overlay {
-    pointer-events: none;
-  }
-  #md-app-container iframe, .md-hub-overlay iframe {
-    pointer-events: auto !important;
+  /* Força a Memed a não bloquear a tela quando não estiver ativa */
+  body:not(.memed-ativa) #md-mac,
+  body:not(.memed-ativa) #md-app-container,
+  body:not(.memed-ativa) .md-hub-overlay,
+  body:not(.memed-ativa) div[id^="md-"] {
+    pointer-events: none !important;
+    z-index: -9999 !important;
+    opacity: 0 !important;
   }
 }
 
