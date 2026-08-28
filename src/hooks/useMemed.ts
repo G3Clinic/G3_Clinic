@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { memedApi } from '../services/api';
 
 /**
@@ -33,6 +33,51 @@ function aguardarMdHub(timeoutMs = 20000): Promise<any> {
   });
 }
 
+// Evento próprio (não depende da Memed) pra avisar o resto do app que o
+// módulo foi aberto/fechado — é o que alimenta o botão de escape global
+// (ver MemedEscapeButton). "memed-ativa" liga/desliga o CSS que libera ou
+// bloqueia a tela por trás do módulo.
+const EVT_ABERTA = 'memed:aberta';
+const EVT_FECHADA = 'memed:fechada';
+
+function marcarAberta() {
+  document.body.classList.add('memed-ativa');
+  window.dispatchEvent(new Event(EVT_ABERTA));
+}
+
+/**
+ * Fecha a Memed na marra, sem depender de nenhum evento vindo dela.
+ * Existe porque, se o módulo travar/falhar ao carregar (rede, token,
+ * indisponibilidade do lado da Memed), core:moduleHide simplesmente nunca
+ * dispara — e sem isso "memed-ativa" fica preso pra sempre, e com ele o
+ * overlay em tela cheia da Memed continua capturando clique de tudo por
+ * trás, mesmo sem mostrar conteúdo nenhum (é exatamente o travamento
+ * "carrega e trava" relatado). O botão de escape chama isto direto.
+ */
+export function fecharMemedForcado() {
+  try {
+    const MdHub = (window as any).MdHub;
+    MdHub?.module?.hide?.('plataforma.prescricao');
+  } catch { /* melhor esforço — a linha de baixo é a que garante a liberação */ }
+  document.body.classList.remove('memed-ativa');
+  window.dispatchEvent(new Event(EVT_FECHADA));
+}
+
+export function useMemedAberta(): boolean {
+  const [aberta, setAberta] = useState(() => document.body.classList.contains('memed-ativa'));
+  useEffect(() => {
+    const onAberta = () => setAberta(true);
+    const onFechada = () => setAberta(false);
+    window.addEventListener(EVT_ABERTA, onAberta);
+    window.addEventListener(EVT_FECHADA, onFechada);
+    return () => {
+      window.removeEventListener(EVT_ABERTA, onAberta);
+      window.removeEventListener(EVT_FECHADA, onFechada);
+    };
+  }, []);
+  return aberta;
+}
+
 function registrarListenersUmaVez(MdHub: any) {
   if (listenersRegistrados) return;
   listenersRegistrados = true;
@@ -44,10 +89,12 @@ function registrarListenersUmaVez(MdHub: any) {
   MdHub.event.add('prescricaoExcluida', (data: any) => {
     if (data?.id != null) memedApi.excluirPrescricao(data.id).catch(() => {});
   });
-  // ✅ Libera a tela quando a Memed for fechada
+  // ✅ Libera a tela quando a Memed for fechada (caminho feliz — quando ela
+  // avisa. O botão de escape cobre o caminho em que ela não avisa.)
   MdHub.event.add('core:moduleHide', (m: any) => {
     if (m?.name === 'plataforma.prescricao') {
       document.body.classList.remove('memed-ativa');
+      window.dispatchEvent(new Event(EVT_FECHADA));
     }
   });
 }
@@ -158,12 +205,12 @@ export function useMemed() {
     // module.show é o único comando obrigatório no clique — sempre executado.
     try {
       console.log('[Memed] chamando module.show…');
-      document.body.classList.add('memed-ativa');
+      marcarAberta();
       MdHub.module.show('plataforma.prescricao');
       console.log('[Memed] module.show OK');
     } catch (e) {
       console.error('[Memed] erro no module.show:', e);
-      document.body.classList.remove('memed-ativa');
+      fecharMemedForcado();
       setErro(e instanceof Error ? e.message : 'Erro ao abrir a prescrição.');
       return;
     }

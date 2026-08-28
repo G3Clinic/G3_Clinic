@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { Topbar } from '../components/Topbar';
+import { MemedEscapeButton } from '../components/MemedEscapeButton';
 
 export function DashboardLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
     <div className="flex h-screen bg-ui-bg overflow-hidden print:h-auto print:overflow-visible print:bg-white print:block">
+      <MemedEscapeButton />
       <div className="contents print:hidden">
         <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       </div>
