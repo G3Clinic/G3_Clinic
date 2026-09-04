@@ -54,6 +54,8 @@ export function AdminCadastroPage() {
   const [filtroPapel, setFiltroPapel] = useState('');
   const [filtroUnidade, setFiltroUnidade] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('');
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [aplicandoLote, setAplicandoLote] = useState(false);
 
   const [modal, setModal] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -96,6 +98,47 @@ export function AdminCadastroPage() {
     const statusOk = !filtroStatus || (filtroStatus === 'ativo' ? u.ativo !== false : u.ativo === false);
     return buscaOk && papelOk && unidadeOk && statusOk;
   });
+
+  // ── Seleção múltipla (checkbox) para ações em lote ──
+  // Só considera os IDs visíveis nos filtros atuais, pra não "selecionar" à revelia
+  // alguém que a busca escondeu.
+  const idsSelecionaveis = usuariosFiltrados.filter(u => !u.is_dono).map(u => u.id);
+  const todosSelecionados = idsSelecionaveis.length > 0 && idsSelecionaveis.every(id => selecionados.has(id));
+  const algumSelecionado = selecionados.size > 0;
+  const toggleSelecionado = (id: string) => setSelecionados(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const toggleSelecionarTodos = () => setSelecionados(prev => {
+    if (idsSelecionaveis.every(id => prev.has(id)) && idsSelecionaveis.length > 0) return new Set();
+    return new Set(idsSelecionaveis);
+  });
+  const usuariosSelecionados = usuarios.filter(u => selecionados.has(u.id));
+
+  const ativarDesativarEmLote = async (ativar: boolean) => {
+    if (!algumSelecionado) return;
+    const acao = ativar ? 'reativar' : 'desativar';
+    if (!confirm(`${ativar ? 'Reativar' : 'Desativar'} o acesso de ${selecionados.size} usuário(s) selecionado(s)?`)) return;
+    setAplicandoLote(true);
+    try {
+      await Promise.all(usuariosSelecionados.map(u => usuariosApi.atualizar(u.id, { ativo: ativar })));
+      setSelecionados(new Set());
+      carregar();
+    } catch (e) { alert(e instanceof Error ? e.message : `Erro ao ${acao} usuários em lote.`); }
+    finally { setAplicandoLote(false); }
+  };
+  const excluirEmLote = async () => {
+    if (!algumSelecionado) return;
+    if (!confirm(`Excluir os ${selecionados.size} usuário(s) selecionado(s)? Essa ação não poderá ser desfeita.`)) return;
+    setAplicandoLote(true);
+    try {
+      await Promise.all(usuariosSelecionados.map(u => usuariosApi.excluir(u.id)));
+      setSelecionados(new Set());
+      carregar();
+    } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao excluir usuários em lote.'); }
+    finally { setAplicandoLote(false); }
+  };
 
   const camposProfissional = () => ({
     conselho_tipo: form.conselho_tipo, conselho_numero: form.conselho_numero, conselho_uf: form.conselho_uf,
@@ -286,11 +329,27 @@ export function AdminCadastroPage() {
         </div>
       </Card>
 
+      {algumSelecionado && (
+        <div className="flex items-center gap-3 bg-brand-light/30 border border-brand-primary/20 rounded-xl px-4 py-3">
+          <span className="text-sm font-bold text-brand-primary">{selecionados.size} selecionado(s)</span>
+          <div className="flex items-center gap-2 ml-auto">
+            <Btn size="sm" variant="secondary" icon={UserCheck} disabled={aplicandoLote} onClick={() => ativarDesativarEmLote(true)} className="text-emerald-600 hover:text-emerald-700 hover:border-emerald-200 hover:bg-emerald-50">Reativar</Btn>
+            <Btn size="sm" variant="secondary" icon={UserX} disabled={aplicandoLote} onClick={() => ativarDesativarEmLote(false)} className="text-amber-600 hover:text-amber-700 hover:border-amber-200 hover:bg-amber-50">Desativar</Btn>
+            <Btn size="sm" variant="secondary" icon={Trash2} disabled={aplicandoLote} onClick={excluirEmLote} className="text-red-600 hover:text-red-700 hover:border-red-200 hover:bg-red-50">Excluir</Btn>
+            <Btn size="sm" variant="ghost" disabled={aplicandoLote} onClick={() => setSelecionados(new Set())}>Limpar seleção</Btn>
+          </div>
+        </div>
+      )}
+
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
+                <th className="px-4 py-3 w-10">
+                  <input type="checkbox" checked={todosSelecionados} onChange={toggleSelecionarTodos}
+                    title="Selecionar todos" className="w-4 h-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary/30" />
+                </th>
                 {['Usuário', 'E-mail', 'Perfil', 'CRM/Registro', 'Status', 'Ações'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wide">{h}</th>
                 ))}
@@ -298,13 +357,19 @@ export function AdminCadastroPage() {
             </thead>
             <tbody className="divide-y divide-gray-50">
               {loading ? (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-500">Carregando...</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-slate-500">Carregando...</td></tr>
               ) : usuarios.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-500">Nenhum usuário cadastrado.</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-slate-500">Nenhum usuário cadastrado.</td></tr>
               ) : usuariosFiltrados.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-500">Nenhum usuário encontrado para os filtros aplicados.</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-slate-500">Nenhum usuário encontrado para os filtros aplicados.</td></tr>
               ) : usuariosFiltrados.map(u => (
-                <tr key={u.id} className="hover:bg-slate-50 group">
+                <tr key={u.id} className={`hover:bg-slate-50 group ${selecionados.has(u.id) ? 'bg-brand-light/10' : ''}`}>
+                  <td className="px-4 py-3">
+                    {!u.is_dono && (
+                      <input type="checkbox" checked={selecionados.has(u.id)} onChange={() => toggleSelecionado(u.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary/30" />
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-brand-light rounded-lg flex items-center justify-center text-brand-primary font-bold text-xs">{iniciais(u.nome)}</div>

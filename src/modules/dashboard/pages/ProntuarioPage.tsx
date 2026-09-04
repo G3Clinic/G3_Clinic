@@ -515,8 +515,15 @@ export function ProntuarioPage() {
                     </tbody>
                   </table>
                 </div>
+                {/* Campo estruturado (separado das observações livres) para poder ser agregado
+                    em Estatísticas e Análise → Queixa Principal. Registros antigos que só têm a
+                    queixa dentro de "observacoes" continuam funcionando ali, só não entram na
+                    estatística (não dá pra extrair de forma confiável de texto livre). */}
+                <div className="mt-6">
+                  <InputField label="Queixa Principal" placeholder="Ex: Dor de dente, check-up de rotina, dor de cabeça..." value={tri.queixa_principal || ''} onChange={e => setT('queixa_principal', e.target.value)} />
+                </div>
                 <h4 className="font-bold text-slate-700 text-sm border-b border-gray-100 pb-2 mt-6">Observações de Triagem</h4>
-                <textarea rows={3} value={tri.observacoes || ''} onChange={e => setT('observacoes', e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary" placeholder="Queixas principais, alergias, motivo da consulta..." />
+                <textarea rows={3} value={tri.observacoes || ''} onChange={e => setT('observacoes', e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary" placeholder="Alergias, motivo detalhado, outras observações..." />
                 <div className="flex justify-end"><Btn onClick={salvarTriagem}>Salvar Triagem</Btn></div>
               </div>
             )}

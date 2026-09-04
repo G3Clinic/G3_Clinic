@@ -343,6 +343,7 @@ export function RelatoriosPage() {
                       <th className="px-4 py-3">Hora</th>
                       <th className="px-4 py-3">Paciente</th>
                       <th className="px-4 py-3">Profissional</th>
+                      <th className="px-4 py-3">Recepcionista</th>
                       <th className="px-4 py-3">Procedimento</th>
                       <th className="px-4 py-3">Convênio</th>
                       <th className="px-4 py-3">Status</th>
@@ -351,13 +352,15 @@ export function RelatoriosPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {agsF.length === 0 ? (
-                      <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Nenhum agendamento no período.</td></tr>
+                      <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-400">Nenhum agendamento no período.</td></tr>
                     ) : agsF.map(a => (
                       <tr key={a.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-slate-500">{fmtData(a.data_agendamento)}</td>
                         <td className="px-4 py-3 text-slate-500 font-mono">{a.hora_inicio || '—'}</td>
                         <td className="px-4 py-3 font-medium text-slate-700">{nomePac(a.paciente_id)}</td>
                         <td className="px-4 py-3 text-slate-500">{nomeProf(a.profissional_id)}</td>
+                        {/* Quem agendou (criado_por) — só existe pra agendamentos criados depois do rastreio de recepcionista. */}
+                        <td className="px-4 py-3 text-slate-500">{a.criado_por ? nomeUsuario(a.criado_por) : '—'}</td>
                         <td className="px-4 py-3 text-slate-500">{nomeProc(a.procedimento_id)}</td>
                         <td className="px-4 py-3 text-slate-500">{nomeConv(a.convenio_id)}</td>
                         <td className="px-4 py-3 text-slate-500">{a.status || '—'}</td>

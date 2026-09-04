@@ -470,6 +470,15 @@ export interface APIRecepcaoLab {
 }
 export const recepcaoLabApi = crudApi<APIRecepcaoLab>('recepcao_lab');
 
+// Laudos / resultados devolvidos pelo laboratório parceiro, vinculados a um trabalho
+// enviado (recepcao_lab_id).
+export interface APILaudo {
+  id: string; recepcao_lab_id?: string | null; profissional_id?: string | null;
+  tipo?: string | null; descricao?: string | null;
+  data_emissao?: string | null; data_entrega?: string | null; status?: string | null;
+}
+export const laudosApi = crudApi<APILaudo>('laudos');
+
 // ── Estoque ──
 export interface APIEstoqueCategoria { id: string; nome: string; descricao?: string | null; ativo?: boolean; }
 export const estoqueCategoriasApi = crudApi<APIEstoqueCategoria>('estoque_categorias');
@@ -575,6 +584,14 @@ export const notificacoesApi = {
 export interface APIModeloProntuario { id: string; titulo?: string | null; conteudo?: any; tipo_acesso?: string | null; profissional_id?: string | null; criado_em?: string | null; }
 export const modelosProntuarioApi = crudApi<APIModeloProntuario>('modelos_prontuario');
 
+// Anamnese Odontológica pré-cadastrada (respostas sim/não + detalhe, por pergunta padrão)
+export interface APIAnamneseOdonto {
+  id: string; paciente_id?: number | null; profissional_id?: string | null;
+  respostas?: Record<string, { resposta: boolean | null; detalhe: string }> | null;
+  data_avaliacao?: string | null;
+}
+export const anamneseOdontoApi = crudApi<APIAnamneseOdonto>('anamnese_odonto');
+
 // Caderneta de vacinação (inspirada no FHIR Immunization)
 export interface APIVacina {
   id: string; paciente_id?: number | null; vacina?: string | null; dose?: string | null;
@@ -638,6 +655,10 @@ export const configApi = {
     const rows = await apiFetch<APIConfig[]>(`/api/clinica_dados?chave=${encodeURIComponent(chave)}`);
     return rows.length ? rows[0].valor : null;
   },
+  // Todas as entradas de config do tenant (sem filtro) — usado quando é preciso
+  // agregar tudo que começa com um prefixo (ex.: "anamnese:<paciente_id>") em vez de
+  // buscar chave a chave.
+  listarTodos: () => apiFetch<APIConfig[]>('/api/clinica_dados'),
   salvar: async (chave: string, valor: unknown) => {
     const rows = await apiFetch<APIConfig[]>(`/api/clinica_dados?chave=${encodeURIComponent(chave)}`);
     if (rows.length) return apiFetch(`/api/clinica_dados/${rows[0].id}`, { method: 'PUT', body: JSON.stringify({ valor }) });

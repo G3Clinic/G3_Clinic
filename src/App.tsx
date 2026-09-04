@@ -13,6 +13,7 @@ import { OdontogramaPage } from './modules/dashboard/pages/OdontogramaPage';
 import { CaixaPage } from './modules/dashboard/pages/CaixaPage';
 import { FechamentosPage } from './modules/dashboard/pages/FechamentosPage';
 import { EstoquePage } from './modules/dashboard/pages/EstoquePage';
+import { LaboratorioPage } from './modules/dashboard/pages/LaboratorioPage';
 import { RelatoriosPage } from './modules/dashboard/pages/RelatoriosPage';
 import { FinDashboardPage } from './modules/dashboard/pages/FinDashboardPage';
 import { RecebimentosPage } from './modules/dashboard/pages/RecebimentosPage';
@@ -30,6 +31,7 @@ import { AdminConveniosPage } from './modules/dashboard/pages/AdminConveniosPage
 import { AdminDREPage } from './modules/dashboard/pages/AdminDREPage';
 import { AdminRepasseRecepPage } from './modules/dashboard/pages/AdminRepasseRecepPage';
 import { AdminBackupPage } from './modules/dashboard/pages/AdminBackupPage';
+import { AdminIntegracoesPage } from './modules/dashboard/pages/AdminIntegracoesPage';
 import { AdminNotificacoesPage } from './modules/dashboard/pages/AdminNotificacoesPage';
 import { MeuPerfilPage } from './modules/dashboard/pages/MeuPerfilPage';
 
@@ -66,6 +68,7 @@ function App() {
           <Route path="caixa" element={<CaixaPage />} />
           <Route path="fechamentos" element={<FechamentosPage />} />
           <Route path="estoque" element={<EstoquePage />} />
+          <Route path="laboratorio" element={<LaboratorioPage />} />
           <Route path="relatorios" element={<RelatoriosPage />} />
           <Route path="financeiro" element={<FinDashboardPage />} />
           <Route path="financeiro/recebimentos" element={<RecebimentosPage />} />
@@ -86,6 +89,7 @@ function App() {
           <Route path="admin/repasse-recep" element={<AdminRepasseRecepPage />} />
           <Route path="admin/notificacoes" element={<AdminNotificacoesPage />} />
           <Route path="admin/backup" element={<AdminBackupPage />} />
+          <Route path="admin/integracoes" element={<AdminIntegracoesPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/login" replace />} />
