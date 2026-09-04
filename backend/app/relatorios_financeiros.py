@@ -163,15 +163,57 @@ def kpis_financeiros(
     total_custos = sum(c.valor or 0 for c in custos)
 
     # ── 8. Repasse a recepcionistas ─────────────────────────────────────
-    repasse_recep_q = base(cm.RepasseRecepcionista).filter(
-        cm.RepasseRecepcionista.competencia >= inicio,
-        cm.RepasseRecepcionista.competencia <= fim,
+    # Mesma lógica já usada (e corrigida) em RelatoriosPage.tsx no frontend — os dois
+    # precisam bater:
+    #   • "Percentual por Consulta" / "Valor Fixo por Consulta": não é um lançamento do
+    #     mês, é uma taxa aplicada a cada agendamento Finalizado, no período do
+    #     relatório, que a PRÓPRIA recepcionista agendou (criado_por). Uma recepcionista
+    #     pode ter mais de uma regra "por Consulta" ativa ao mesmo tempo (ex.: percentual
+    #     + fixo, ou uma nova cadastrada sem excluir a antiga) — soma todas, nunca
+    #     escolhe uma arbitrariamente.
+    #   • "Valor Fixo Mensal": lançamento do mês — só entra se a competência cair dentro
+    #     do período do relatório e o status for Pendente ou Pago.
+    # Antes, esta seção somava direto RepasseRecepcionista.valor filtrado por
+    # competência: (a) tratava % como se já fosse R$, e (b) como toda regra "por
+    # Consulta" é salva sem competência, o filtro por intervalo de datas excluía essas
+    # linhas por completo — o Resultado Líquido aparecia maior do que é de verdade
+    # sempre que a comissão de recepção é por consulta (o tipo mais comum).
+    regras_recep_q = base(cm.RepasseRecepcionista)
+    if x_filial_id is not None:
+        regras_recep_q = regras_recep_q.filter(cm.RepasseRecepcionista.unidade_id == x_filial_id)
+    regras_recep = regras_recep_q.all()
+
+    ag_finalizados_periodo_q = base(cm.Agendamento).filter(
+        cm.Agendamento.status == "Finalizado",
+        cm.Agendamento.data_agendamento >= inicio,
+        cm.Agendamento.data_agendamento <= fim,
     )
     if x_filial_id is not None:
-        repasse_recep_q = repasse_recep_q.filter(cm.RepasseRecepcionista.unidade_id == x_filial_id)
-    repasses_recep = repasse_recep_q.all()
-    total_repasse_recep = sum(r.valor or 0 for r in repasses_recep)
-    qtd_pendentes_recep = sum(1 for r in repasses_recep if (r.status or "").lower() == "pendente")
+        ag_finalizados_periodo_q = ag_finalizados_periodo_q.filter(cm.Agendamento.unidade_id == x_filial_id)
+    ags_por_recepcionista = {}
+    for a in ag_finalizados_periodo_q.all():
+        if a.criado_por:
+            ags_por_recepcionista.setdefault(a.criado_por, []).append(a)
+
+    total_repasse_recep = 0.0
+    qtd_pendentes_recep = 0
+    for r in regras_recep:
+        tipo = r.tipo or ""
+        valor_regra = r.valor or 0
+        if "por Consulta" in tipo:
+            ags_dela = ags_por_recepcionista.get(r.recepcionista_id, [])
+            if "Percentual" in tipo:
+                total_repasse_recep += sum((a.valor_cobrado or 0) * (valor_regra / 100.0) for a in ags_dela)
+            elif "Fixo" in tipo:
+                total_repasse_recep += len(ags_dela) * valor_regra
+        else:
+            # "Valor Fixo Mensal" (ou outro tipo tratado como lançamento com competência própria).
+            dentro_do_periodo = r.competencia is not None and inicio <= r.competencia <= fim
+            status_norm = (r.status or "").strip().lower()
+            if dentro_do_periodo and status_norm in ("pago", "pendente"):
+                total_repasse_recep += valor_regra
+                if status_norm == "pendente":
+                    qtd_pendentes_recep += 1
 
     # ── 9. Margem de contribuição por procedimento ──────────────────────
     proc_q = base(cm.Procedimento).filter(cm.Procedimento.ativo.is_(True))

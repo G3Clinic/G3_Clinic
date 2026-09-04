@@ -479,24 +479,32 @@ def _processar_repasse_medico(db: Session, user, ag_id, valor, nome_pac, forma_p
         db.flush()
 
 def _processar_repasse_recepcao(db: Session, user, ag_id, valor, nome_pac, forma_pagamento):
-    """Verifica se a recepcionista possui repasse por consulta e lança SAÍDA no caixa do dia."""
+    """Verifica se a recepcionista possui repasse por consulta e lança SAÍDA no caixa do dia.
+    Soma TODAS as regras "por Consulta" cadastradas pra essa recepcionista — uma
+    recepcionista pode ter mais de uma ativa ao mesmo tempo (ex.: percentual + fixo, ou
+    uma nova cadastrada sem excluir a antiga). Antes isto usava .first() sem nenhum
+    critério de ordenação, então com mais de uma regra cadastrada o sistema aplicava
+    uma delas arbitrariamente e ignorava as demais silenciosamente."""
     ag = db.query(clinica_models.Agendamento).filter(clinica_models.Agendamento.id == ag_id).first()
     if not ag or not ag.criado_por:
         return
-    
-    rep = db.query(clinica_models.RepasseRecepcionista).filter(
+
+    regras = db.query(clinica_models.RepasseRecepcionista).filter(
         clinica_models.RepasseRecepcionista.recepcionista_id == ag.criado_por
-    ).first()
-    if not rep or not rep.valor:
-        return
-        
-    tipo = rep.tipo or ""
-    repasse_final = 0
-    if "Percentual" in tipo:
-        repasse_final = (valor or 0) * (rep.valor / 100.0)
-    elif "por Consulta" in tipo and "Fixo" in tipo:
-        repasse_final = rep.valor
-        
+    ).all()
+
+    repasse_final = 0.0
+    for rep in regras:
+        if not rep.valor:
+            continue
+        tipo = rep.tipo or ""
+        if "por Consulta" not in tipo:
+            continue  # "Valor Fixo Mensal" não é disparado por consulta.
+        if "Percentual" in tipo:
+            repasse_final += (valor or 0) * (rep.valor / 100.0)
+        elif "Fixo" in tipo:
+            repasse_final += rep.valor
+
     if repasse_final > 0:
         prof_recep = db.query(clinica_models.PerfilUsuario).filter(clinica_models.PerfilUsuario.id == ag.criado_por).first()
         nome_recep = prof_recep.nome if prof_recep else "Recepção"
