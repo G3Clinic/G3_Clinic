@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ClipboardList, Search, User, FileText, Activity, Stethoscope, FileSymlink, AlertCircle, Plus, Trash2, Pill, BookText, Save, Edit2, Settings, ChevronRight, Syringe, AlertTriangle, Printer } from 'lucide-react';
+import { ClipboardList, Search, User, FileText, Activity, Stethoscope, FileSymlink, AlertCircle, Plus, Trash2, Pill, BookText, Save, Edit2, Settings, ChevronRight, Syringe, AlertTriangle, Printer, Send, Lock, Globe } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, InputField, Modal } from '../../../components/ui/shared';
 import {
   pacientesApi, atendimentosClinicosApi, evolucoesApi, documentosApi, modelosProntuarioApi,
@@ -46,12 +46,13 @@ const QUILL_MODULES = {
   },
 };
 
-type TabId = 'vacinacao' | 'triagem' | 'evolucao' | 'exames' | 'receituario' | 'atestado';
+type TabId = 'vacinacao' | 'triagem' | 'evolucao' | 'exames' | 'receituario' | 'atestado' | 'encaminhamento';
 const idade = (nasc?: string) => nasc ? Math.floor((Date.now() - new Date(nasc).getTime()) / 31557600000) : null;
 
 export function ProntuarioPage() {
   const { theme } = useTheme();
   const { user } = useAuth();
+  const isAdmin = !!(user?.is_dono || user?.role === 'administrador');
   const [pacientes, setPacientes] = useState<APIPaciente[]>([]);
   const [busca, setBusca] = useState('');
   const [paciente, setPaciente] = useState<APIPaciente | null>(null);
@@ -164,6 +165,7 @@ export function ProntuarioPage() {
   const [receita, setReceita] = useState<{ medicamento: string; quantidade: string; posologia: string }[]>([]);
   const [novoMed, setNovoMed] = useState({ medicamento: '', quantidade: '', posologia: '' });
   const [atestado, setAtestado] = useState({ dias: '', cid: '', texto: '' });
+  const [encaminhamento, setEncaminhamento] = useState('');
 
   // Caderneta de vacinação (FHIR Immunization local)
   const VACINA_VAZIA = { vacina: '', dose: '', data_aplicacao: '', lote: '', fabricante: '', via: '', local_aplicacao: '', aplicador: '', observacoes: '' };
@@ -263,10 +265,12 @@ export function ProntuarioPage() {
     }
     const dRec = meus.find(d => d.tipo === 'receituario'); setReceita(dRec?.conteudo || []);
     const dAt = meus.find(d => d.tipo === 'atestado'); if (dAt?.conteudo) setAtestado(dAt.conteudo);
+    const dEnc = meus.find(d => d.tipo === 'encaminhamento');
+    setEncaminhamento(typeof dEnc?.conteudo === 'string' ? dEnc.conteudo : '');
   }, []);
 
   const abrirProntuario = async (p: APIPaciente) => {
-    setPaciente(p); setActiveTab('triagem'); setTri({}); setExames(''); setReceita([]); setAtestado({ dias: '', cid: '', texto: '' });
+    setPaciente(p); setActiveTab('triagem'); setTri({}); setExames(''); setReceita([]); setAtestado({ dias: '', cid: '', texto: '' }); setEncaminhamento('');
     carregarVacinas(p.id);
     configApi.obter(`anamnese:${p.id}`).then(v => setAnamnese(v || null)).catch(() => setAnamnese(null));
     // acha o atendimento existente do paciente (histórico contínuo — não é por
@@ -317,6 +321,17 @@ export function ProntuarioPage() {
     await salvarDoc('receituario', arr);
   };
   const salvarAtestado = async () => { await salvarDoc('atestado', atestado); alert('Atestado salvo!'); };
+  const salvarEncaminhamento = async () => { await salvarDoc('encaminhamento', encaminhamento); alert('Encaminhamento salvo!'); };
+  const modeloEncaminhamento = () => {
+    const nome = paciente?.nome || '____________________';
+    setEncaminhamento(
+      `<p style="text-align:center"><strong>ENCAMINHAMENTO</strong></p>` +
+      `<p>Encaminho o(a) paciente <strong>${nome}</strong> para avaliação e conduta com a especialidade de <strong>_____________________</strong>.</p>` +
+      `<p><strong>Motivo do encaminhamento:</strong> _____________________</p>` +
+      `<p><strong>Resumo clínico relevante:</strong> _____________________</p>` +
+      `<p>&nbsp;</p><p style="text-align:center">_______________________________<br>Assinatura e carimbo do médico</p>`
+    );
+  };
 
   const receituarioHtml = () => receita.length === 0
     ? '<p><em>Nenhum medicamento prescrito.</em></p>'
@@ -348,6 +363,7 @@ export function ProntuarioPage() {
     { id: 'exames', label: 'Exames Solicitados', icon: Stethoscope },
     { id: 'receituario', label: 'Receituário Médico', icon: FileText },
     { id: 'atestado', label: 'Atestado', icon: FileSymlink },
+    { id: 'encaminhamento', label: 'Encaminhamento', icon: Send },
   ] as const;
 
   return (
@@ -665,6 +681,27 @@ export function ProntuarioPage() {
                 </div>
               </div>
             )}
+
+            {activeTab === 'encaminhamento' && (
+              <div className="space-y-5 animate-fade-in-up">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-slate-500">Modelo:</span>
+                  <Btn size="sm" variant="outline" onClick={modeloEncaminhamento}>Encaminhamento padrão</Btn>
+                  <span className="text-[11px] text-slate-400">— já preenche o nome do paciente</span>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Texto do Encaminhamento</label>
+                  <div className="bg-white rounded-xl overflow-hidden border border-gray-200">
+                    <ReactQuill theme="snow" value={encaminhamento} onChange={setEncaminhamento} modules={QUILL_MODULES}
+                      className="h-56 mb-12" placeholder="Escolha o modelo acima ou escreva o encaminhamento…" />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Btn icon={Printer} variant="outline" disabled={!encaminhamento.replace(/<[^>]*>/g, '').trim()} onClick={() => imprimir('Encaminhamento', encaminhamento)}>Imprimir</Btn>
+                  <Btn icon={Save} onClick={salvarEncaminhamento}>Salvar Encaminhamento</Btn>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
       )}
@@ -680,18 +717,40 @@ export function ProntuarioPage() {
             <div className="border border-gray-100 rounded-xl divide-y divide-gray-50 max-h-[360px] overflow-y-auto">
               {modelos.length === 0 ? (
                 <p className="text-sm text-slate-400 p-4 text-center">Nenhum modelo cadastrado.</p>
-              ) : modelos.map(m => (
+              ) : modelos.map(m => {
+                const global = !m.tipo_acesso || m.tipo_acesso === 'global';
+                const podeEditar = isAdmin || (!global && String(m.profissional_id) === String(user?.id));
+                return (
                 <div key={m.id} className={`flex items-center justify-between p-3 hover:bg-gray-50 transition-colors ${modeloEditId === m.id ? 'bg-brand-light/20' : ''}`}>
-                  <button onClick={() => editarModelo(m)} className="flex-1 text-left min-w-0">
-                    <p className="text-sm font-semibold text-slate-700 truncate">{m.titulo || 'Sem título'}</p>
-                    <p className="text-[10px] text-slate-400">{m.criado_em ? new Date(m.criado_em).toLocaleDateString('pt-BR') : ''}</p>
-                  </button>
-                  <div className="flex gap-1 shrink-0">
-                    <button title="Editar" onClick={() => editarModelo(m)} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-light rounded-lg"><Edit2 size={14} /></button>
-                    <button title="Excluir" onClick={() => excluirModelo(m)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
-                  </div>
+                  {(() => {
+                    const conteudo = (
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold text-slate-700 truncate">{m.titulo || 'Sem título'}</p>
+                        {global
+                          ? <span title="Modelo do administrador, visível para todos" className="inline-flex items-center gap-0.5 text-[9px] font-bold text-blue-600 bg-blue-50 border border-blue-100 rounded px-1 py-0.5 shrink-0"><Globe size={9} /> Global</span>
+                          : <span title="Modelo pessoal, só visível para quem criou" className="inline-flex items-center gap-0.5 text-[9px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded px-1 py-0.5 shrink-0"><Lock size={9} /> Pessoal</span>}
+                      </div>
+                    );
+                    return podeEditar ? (
+                      <button onClick={() => editarModelo(m)} className="flex-1 text-left min-w-0">
+                        {conteudo}
+                        <p className="text-[10px] text-slate-400">{m.criado_em ? new Date(m.criado_em).toLocaleDateString('pt-BR') : ''}</p>
+                      </button>
+                    ) : (
+                      <div className="flex-1 text-left min-w-0">
+                        {conteudo}
+                        <p className="text-[10px] text-slate-400">{m.criado_em ? new Date(m.criado_em).toLocaleDateString('pt-BR') : ''}</p>
+                      </div>
+                    );
+                  })()}
+                  {podeEditar && (
+                    <div className="flex gap-1 shrink-0">
+                      <button title="Editar" onClick={() => editarModelo(m)} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-light rounded-lg"><Edit2 size={14} /></button>
+                      <button title="Excluir" onClick={() => excluirModelo(m)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+                    </div>
+                  )}
                 </div>
-              ))}
+              );})}
             </div>
           </div>
 
