@@ -97,7 +97,31 @@ async def obter_token(*, id_medico: str, nome: str, cpf: str, crm: str, uf: str,
 
     O external_id (idExterno) recebe um prefixo para não colidir no ambiente de
     homologação, que é compartilhado entre parceiros.
+
+    A validação de dados do prescritor no CFM (doc.memed.com.br/docs/como-fazer/
+    validar-dados-prescritor-cfm) exige nome, sobrenome, CPF, data de nascimento e
+    board (CRM/UF) — sem os 4 primeiros o cadastro fica "Inativo" na Memed e o
+    módulo de prescrição abre em branco (confirmado com o suporte da Memed).
+    Por isso cpf/data_nascimento são obrigatórios aqui, e não apenas repassados.
     """
+    if not cpf or not re.sub(r"\D", "", cpf):
+        raise Exception(
+            "CPF do profissional não cadastrado. Preencha um CPF válido no "
+            "cadastro do usuário — a Memed exige o CPF real para validar o "
+            "prescritor no CFM."
+        )
+    if not crm or not uf:
+        raise Exception(
+            "Registro no conselho (CRM/CRO/etc.) ou UF do profissional não "
+            "cadastrado. A Memed exige os dois para validar o prescritor no CFM."
+        )
+    if not data_nascimento:
+        raise Exception(
+            "Data de nascimento do profissional não cadastrada. A Memed exige "
+            "esse dado para validar o prescritor no CFM — sem ele a prescrição "
+            "digital fica com o cadastro Inativo e abre em branco."
+        )
+
     # A Memed exige nome E sobrenome (1–255 chars). Divide o nome completo.
     partes = (nome or "").strip().split()
     primeiro_nome = partes[0] if partes else "Profissional"
@@ -105,23 +129,40 @@ async def obter_token(*, id_medico: str, nome: str, cpf: str, crm: str, uf: str,
 
     external_id = f"{MEMED_ID_PREFIXO}-{id_medico}"
 
-    # 1) Médico já cadastrado? GET devolve o token (POST daria "já cadastrado").
+    # Atributos exigidos pela validação CFM — sempre os mesmos no POST (criação)
+    # e no PATCH (atualização), como orienta a documentação da Memed: "envie
+    # todos os campos obrigatórios no PATCH, não apenas o que está corrigindo",
+    # para que a reativação automática do cadastro aconteça.
+    attrs = {
+        "external_id": external_id,
+        "nome": primeiro_nome,
+        "sobrenome": sobrenome,
+        "cpf": cpf,
+        "data_nascimento": data_nascimento,
+        "board": {"board_code": "CRM", "board_number": crm, "board_state": uf},
+    }
+
+    # 1) Médico já cadastrado? Faz PATCH com os dados atuais (sincroniza/reativa
+    # no CFM caso data_nascimento/CPF tenham sido corrigidos depois do cadastro
+    # inicial) e devolve o token.
     try:
         existente = await _request("GET", f"sinapse-prescricao/usuarios/{external_id}")
         token = _extrair_token(existente)
+        try:
+            atualizado = await _request(
+                "PATCH", f"sinapse-prescricao/usuarios/{external_id}",
+                json_body={"data": {"type": "usuarios", "attributes": attrs}},
+            )
+            token = _extrair_token(atualizado) or token
+        except Exception:
+            pass  # PATCH falhou (ex.: sem mudança) — mantém o token já obtido
         if token:
             return token
     except Exception:
         pass  # 404/não encontrado → segue para criar
 
     # 2) Primeiro acesso: cria o prescritor e recebe o token.
-    body = {"data": {"type": "usuarios", "attributes": {
-        "external_id": external_id,
-        "nome": primeiro_nome,
-        "sobrenome": sobrenome,
-        "cpf": cpf,
-        "board": {"board_code": "CRM", "board_number": crm, "board_state": uf},
-    }}}
+    body = {"data": {"type": "usuarios", "attributes": attrs}}
     try:
         criado = await _request("POST", "sinapse-prescricao/usuarios", json_body=body)
         return _extrair_token(criado)
