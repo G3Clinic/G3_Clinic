@@ -8,6 +8,7 @@ import {
 } from '../../../services/api';
 import ReactQuill, { Quill } from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
+import { useNavigate } from 'react-router-dom';
 import { useMemed } from '../../../hooks/useMemed';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -52,7 +53,14 @@ const idade = (nasc?: string) => nasc ? Math.floor((Date.now() - new Date(nasc).
 export function ProntuarioPage() {
   const { theme } = useTheme();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = !!(user?.is_dono || user?.role === 'administrador');
+  // Mesmos 4 campos que a Memed exige pra validar o prescritor no CFM (ver
+  // MemedDadosObrigatoriosGate). Se algum faltar, o erro do backend ao pedir o
+  // token é sempre por causa disso — em vez de mostrar a mensagem técnica crua,
+  // oferecemos direto o caminho pra completar o cadastro em Meu Perfil.
+  const faltaDadosMemed = !!(user?.role === 'profissional_saude' &&
+    (!user.cpf?.trim() || !user.conselho_numero?.trim() || !user.conselho_uf?.trim() || !user.data_nascimento));
   const [pacientes, setPacientes] = useState<APIPaciente[]>([]);
   const [busca, setBusca] = useState('');
   const [paciente, setPaciente] = useState<APIPaciente | null>(null);
@@ -665,7 +673,16 @@ export function ProntuarioPage() {
                       {memedPronto ? 'Abrir Prescrição' : 'Preparando prescrição…'}
                     </Btn>
                   </div>
-                  {memedErro ? (
+                  {memedErro && faltaDadosMemed ? (
+                    <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-2">
+                      <p>
+                        ⚠️ Falta completar seu cadastro para emitir prescrições digitais — a Memed exige
+                        <strong> CPF</strong>, <strong>registro no conselho (CRM/UF)</strong> e{' '}
+                        <strong>data de nascimento</strong> reais para validar você como prescritor no CFM.
+                      </p>
+                      <Btn size="sm" onClick={() => navigate('/dashboard/perfil')}>Completar meus dados</Btn>
+                    </div>
+                  ) : memedErro ? (
                     <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                       ⚠️ {memedErro}
                     </div>
