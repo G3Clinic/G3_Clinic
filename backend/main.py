@@ -700,6 +700,41 @@ def caixa_fechar(dados: dict = Body(default={}), user=Depends(require_modulo("ca
             "total_arrecadado": total, "fechamento_origem": origem, "abertura_origem": meta.get("abertura", "manual")}
 
 
+# --- Estorno de um lançamento de caixa (ENTRADA) ---
+# Não apaga nada — gera um contra-lançamento de SAÍDA no mesmo valor (rastro
+# contábil do dia continua íntegro) e marca a ENTRADA original como estornada.
+@app.post("/api/caixa/lancamentos/{lancamento_id}/estornar")
+def estornar_lancamento_caixa(
+    lancamento_id: str,
+    user=Depends(require_modulo("caixa")),
+    db: Session = Depends(get_db),
+):
+    original = db.query(clinica_models.CaixaLancamento).filter(
+        clinica_models.CaixaLancamento.id == lancamento_id,
+        clinica_models.CaixaLancamento.empresa_id == user.empresa_id,
+    ).first()
+    if not original:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+    if original.tipo != "ENTRADA":
+        raise HTTPException(status_code=400, detail="Só é possível estornar um lançamento de ENTRADA")
+    if original.estornado:
+        raise HTTPException(status_code=400, detail="Este lançamento já foi estornado")
+
+    original.estornado = True
+    contra = clinica_models.CaixaLancamento(
+        empresa_id=user.empresa_id, unidade_id=original.unidade_id, tipo="SAIDA",
+        descricao=f"Estorno — {original.descricao or 'lançamento'}", paciente_id=original.paciente_id,
+        profissional_id=original.profissional_id, valor=original.valor, forma_pagamento=original.forma_pagamento,
+        data=date.today(), criado_por=user.id, estorno_de_id=original.id,
+    )
+    db.add(contra)
+    registrar_evento(db, user, "alteração", "caixa", "caixa_lancamentos", original.id,
+                     f'Estornou lançamento "{original.descricao}" (R$ {(original.valor or 0):.2f})')
+    db.commit()
+    db.refresh(contra)
+    return {"ok": True, "lancamento_estornado_id": original.id, "contra_lancamento_id": contra.id}
+
+
 # --- Backup: exporta os dados da empresa (JSON) ---
 @app.get("/api/backup")
 def exportar_backup(

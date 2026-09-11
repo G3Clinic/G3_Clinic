@@ -85,6 +85,21 @@ export function RelatoriosPage() {
     }, {})
   );
 
+  // Quem agendou (recepcionista, via criado_por) vs quem atendeu (profissional_id) —
+  // agrupamento por recepcionista no período, pra controle de produtividade da recepção.
+  const agendaPorRecepcionista = usuarios
+    .filter(u => u.role === 'recepcionista' || u.role === 'administrador')
+    .map(rec => {
+      const doRecep = agsF.filter(a => a.criado_por === rec.id);
+      const finalizados = doRecep.filter(a => a.status === 'Finalizado').length;
+      const canceladosFaltas = doRecep.filter(a => a.status === 'Falta' || a.status === 'Cancelado').length;
+      return {
+        id: rec.id, nome: rec.nome, total: doRecep.length, finalizados, canceladosFaltas,
+        taxaComparecimento: (finalizados + canceladosFaltas) ? Math.round((finalizados / (finalizados + canceladosFaltas)) * 100) : 0,
+      };
+    })
+    .filter(r => r.total > 0);
+
   // Produção: métricas por profissional
   const producao = profissionais.map(prof => {
     const doProf = agsF.filter(a => a.profissional_id === prof.id);
@@ -342,7 +357,8 @@ export function RelatoriosPage() {
                       <th className="px-4 py-3">Data</th>
                       <th className="px-4 py-3">Hora</th>
                       <th className="px-4 py-3">Paciente</th>
-                      <th className="px-4 py-3">Profissional</th>
+                      <th className="px-4 py-3">Agendado por</th>
+                      <th className="px-4 py-3">Atendido por</th>
                       <th className="px-4 py-3">Procedimento</th>
                       <th className="px-4 py-3">Convênio</th>
                       <th className="px-4 py-3">Status</th>
@@ -351,17 +367,48 @@ export function RelatoriosPage() {
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {agsF.length === 0 ? (
-                      <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-400">Nenhum agendamento no período.</td></tr>
+                      <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-400">Nenhum agendamento no período.</td></tr>
                     ) : agsF.map(a => (
                       <tr key={a.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-slate-500">{fmtData(a.data_agendamento)}</td>
                         <td className="px-4 py-3 text-slate-500 font-mono">{a.hora_inicio || '—'}</td>
                         <td className="px-4 py-3 font-medium text-slate-700">{nomePac(a.paciente_id)}</td>
+                        <td className="px-4 py-3 text-slate-500">{a.criado_por ? nomeUsuario(a.criado_por) : <span className="text-slate-300 italic">não registrado</span>}</td>
                         <td className="px-4 py-3 text-slate-500">{nomeProf(a.profissional_id)}</td>
                         <td className="px-4 py-3 text-slate-500">{nomeProc(a.procedimento_id)}</td>
                         <td className="px-4 py-3 text-slate-500">{nomeConv(a.convenio_id)}</td>
                         <td className="px-4 py-3 text-slate-500">{a.status || '—'}</td>
                         <td className="px-4 py-3 text-right font-mono text-slate-700">{brl(a.valor_cobrado || 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            <Card title="Agendamentos por Recepcionista" className="mt-6">
+              <p className="text-xs text-slate-500 mb-3">Quem agendou cada atendimento (criado_por) — só disponível para agendamentos criados depois que esse rastreio foi implementado; os mais antigos aparecem como "não registrado" na lista acima e ficam de fora deste resumo.</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-slate-500 font-semibold border-b border-gray-100">
+                    <tr>
+                      <th className="px-4 py-3">Recepcionista</th>
+                      <th className="px-4 py-3 text-center">Agendou</th>
+                      <th className="px-4 py-3 text-center">Finalizados</th>
+                      <th className="px-4 py-3 text-center">Cancelados/Faltas</th>
+                      <th className="px-4 py-3 text-center">Taxa de Comparecimento</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {agendaPorRecepcionista.length === 0 ? (
+                      <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-400">Nenhum agendamento com recepcionista registrada no período.</td></tr>
+                    ) : agendaPorRecepcionista.map(r => (
+                      <tr key={r.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium text-slate-700">{r.nome}</td>
+                        <td className="px-4 py-3 text-center text-slate-500">{r.total}</td>
+                        <td className="px-4 py-3 text-center text-emerald-600 font-bold">{r.finalizados}</td>
+                        <td className="px-4 py-3 text-center text-red-500 font-bold">{r.canceladosFaltas}</td>
+                        <td className="px-4 py-3 text-center text-slate-500">{r.taxaComparecimento}%</td>
                       </tr>
                     ))}
                   </tbody>

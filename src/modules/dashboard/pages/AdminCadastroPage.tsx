@@ -34,12 +34,12 @@ const MODULOS_POR_PAPEL: Record<string, string[]> = {
 
 type Form = {
   nome: string; email: string; cpf: string; telefone: string; papel: string; senha: string;
-  conselho_tipo: string; conselho_numero: string; conselho_uf: string;
+  conselho_tipo: string; conselho_numero: string; conselho_uf: string; data_nascimento: string;
   especialidade_medica: string; rqe_numero: string; rqe_uf: string;
 };
 const FORM_VAZIO: Form = {
   nome: '', email: '', cpf: '', telefone: '', papel: '', senha: '',
-  conselho_tipo: 'CRM', conselho_numero: '', conselho_uf: 'SP',
+  conselho_tipo: 'CRM', conselho_numero: '', conselho_uf: 'SP', data_nascimento: '',
   especialidade_medica: '', rqe_numero: '', rqe_uf: 'SP',
 };
 const UFS = ['SP', 'RJ', 'MG', 'BA'];
@@ -100,6 +100,10 @@ export function AdminCadastroPage() {
   const camposProfissional = () => ({
     conselho_tipo: form.conselho_tipo, conselho_numero: form.conselho_numero, conselho_uf: form.conselho_uf,
     especialidade_medica: form.especialidade_medica || undefined, rqe_numero: form.rqe_numero || undefined, rqe_uf: form.rqe_uf || undefined,
+    // Exigido pela Memed na validação CFM do prescritor — sem isso ela marca o
+    // cadastro como Inativo e a prescrição digital abre em branco (confirmado
+    // com o suporte da Memed).
+    data_nascimento: form.data_nascimento || undefined,
   });
 
   // ── Novo usuário ──
@@ -140,6 +144,7 @@ export function AdminCadastroPage() {
       nome: u.nome || '', email: u.email || '', cpf: u.cpf || '', telefone: u.telefone || '',
       papel: u.role ? NUM_POR_ROLE[u.role] || '3' : '3', senha: '',
       conselho_tipo: u.conselho_tipo || 'CRM', conselho_numero: u.conselho_numero || '', conselho_uf: u.conselho_uf || 'SP',
+      data_nascimento: u.data_nascimento ? u.data_nascimento.slice(0, 10) : '',
       especialidade_medica: u.especialidade_medica || '', rqe_numero: u.rqe_numero || '', rqe_uf: u.rqe_uf || 'SP',
     });
     setErro('');
@@ -313,7 +318,14 @@ export function AdminCadastroPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-500 text-xs">{u.email}</td>
                   <td className="px-4 py-3"><Badge color={u.role === 'administrador' ? 'red' : u.role === 'profissional_saude' ? 'blue' : 'purple'}>{u.role ? LABEL_ROLE[u.role] || u.role : '—'}</Badge></td>
-                  <td className="px-4 py-3 text-slate-500 text-xs font-mono">{u.conselho_numero ? `${u.conselho_tipo || ''} ${u.conselho_numero}/${u.conselho_uf || ''}` : '—'}</td>
+                  <td className="px-4 py-3 text-slate-500 text-xs font-mono">
+                    {u.conselho_numero ? `${u.conselho_tipo || ''} ${u.conselho_numero}/${u.conselho_uf || ''}` : '—'}
+                    {u.role === 'profissional_saude' && !u.data_nascimento && (
+                      <span title="Sem data de nascimento — a Memed inativa o prescritor e a prescrição digital não abre até isso ser preenchido." className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                        <AlertTriangle size={10} /> sem nasc.
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3"><Badge color={u.ativo === false ? 'gray' : 'green'}>{u.ativo === false ? 'Inativo' : 'Ativo'}</Badge></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -363,6 +375,8 @@ export function AdminCadastroPage() {
                 </SelectField>
               </div>
               <p className="text-[10px] text-slate-500 mt-1">Ex: CRM 12345/SP — obrigatório para identificação do profissional habilitado.</p>
+              <InputField label="Data de Nascimento *" type="date" required value={form.data_nascimento} onChange={e => setCampo('data_nascimento', e.target.value)} />
+              <p className="text-[10px] text-slate-500 -mt-2">Exigida pela Memed para validar o prescritor no CFM — sem isso a prescrição digital não abre.</p>
               <h4 className="font-bold text-slate-700 text-sm mt-4">Especialidade Médica (RQE)</h4>
               <InputField label="Especialidade Médica (opcional)" placeholder="Ex: Cardiologia" value={form.especialidade_medica} onChange={e => setCampo('especialidade_medica', e.target.value)} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -412,6 +426,8 @@ export function AdminCadastroPage() {
                   {UFS.map(uf => <option key={uf}>{uf}</option>)}
                 </SelectField>
               </div>
+              <InputField label="Data de Nascimento *" type="date" required value={form.data_nascimento} onChange={e => setCampo('data_nascimento', e.target.value)} />
+              <p className="text-[10px] text-slate-500 -mt-2">Exigida pela Memed para validar o prescritor no CFM — sem isso a prescrição digital não abre.</p>
               <InputField label="Especialidade Médica (opcional)" value={form.especialidade_medica} onChange={e => setCampo('especialidade_medica', e.target.value)} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <InputField label="Número do RQE (opcional)" value={form.rqe_numero} onChange={e => setCampo('rqe_numero', e.target.value)} />

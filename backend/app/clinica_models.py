@@ -356,6 +356,10 @@ class CaixaLancamento(Base, TenantMixin):
     data = Column(Date, nullable=True)
     criado_por = Column(String, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
+    # Estorno: marca a ENTRADA original como revertida; o contra-lançamento
+    # de SAÍDA gerado aponta de volta pra ela via estorno_de_id (auditoria).
+    estornado = Column(Boolean, default=False)
+    estorno_de_id = Column(String, nullable=True)
 
 
 class FinanceiroContaPagar(Base, TenantMixin):

@@ -302,6 +302,7 @@ export interface APIUsuario {
   especialidade_medica?: string | null;
   rqe_numero?: string | null;
   rqe_uf?: string | null;
+  data_nascimento?: string | null;
 }
 
 export interface APIModulo { chave: string; nome: string; }
@@ -516,9 +517,14 @@ export interface APICaixaLancamento {
   id: string; tipo?: string | null; descricao?: string | null; paciente_id?: number | null;
   profissional_id?: string | null;
   valor?: number | null; forma_pagamento?: string | null; data?: string | null; criado_em?: string | null;
-  criado_por?: string | null;
+  criado_por?: string | null; estornado?: boolean | null; estorno_de_id?: string | null;
 }
 export const caixaLancamentosApi = crudApi<APICaixaLancamento>('caixa_lancamentos');
+// Estorna uma ENTRADA: gera um contra-lançamento de SAÍDA (sem apagar nada) e marca a original.
+export function estornarLancamentoCaixa(id: string) {
+  return apiFetch<{ ok: boolean; lancamento_estornado_id: string; contra_lancamento_id: string }>(
+    `/api/caixa/lancamentos/${id}/estornar`, { method: 'POST' });
+}
 
 // Caixa — turnos (abertura/fechamento do dia)
 export interface APICaixaTurno {

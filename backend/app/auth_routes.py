@@ -10,6 +10,7 @@ Rotas de autenticação e de administração (delegação de acesso).
 /admin/usuarios/{id}/filiais    → vincula usuário a uma filial
 /admin/usuarios/{id}/permissoes → define quais módulos o usuário acessa numa filial
 """
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -67,6 +68,10 @@ class NovoUsuarioIn(BaseModel):
     especialidade_medica: Optional[str] = None
     rqe_numero: Optional[str] = None
     rqe_uf: Optional[str] = None
+    # Exigido pela Memed na validação CFM do prescritor — sem isso ela marca o
+    # cadastro do médico como Inativo e o módulo de prescrição abre em branco
+    # (achado com o suporte da Memed em 2026-09).
+    data_nascimento: Optional[str] = None
 
 
 class PermissoesIn(BaseModel):
@@ -267,13 +272,20 @@ def criar_usuario(
     if db.query(cm.PerfilUsuario).filter(cm.PerfilUsuario.email == dados.email).first():
         raise HTTPException(status_code=409, detail="E-mail já cadastrado")
 
+    nasc = None
+    if dados.data_nascimento:
+        try:
+            nasc = date.fromisoformat(dados.data_nascimento[:10])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Data de nascimento inválida")
+
     novo = cm.PerfilUsuario(
         empresa_id=empresa_id, nome=dados.nome, email=dados.email,
         senha_hash=hash_senha(dados.senha), role=dados.role, ativo=True,
         cpf=dados.cpf, telefone=dados.telefone, especialidade=dados.especialidade,
         conselho_tipo=dados.conselho_tipo, conselho_numero=dados.conselho_numero,
         conselho_uf=dados.conselho_uf, especialidade_medica=dados.especialidade_medica,
-        rqe_numero=dados.rqe_numero, rqe_uf=dados.rqe_uf,
+        rqe_numero=dados.rqe_numero, rqe_uf=dados.rqe_uf, data_nascimento=nasc,
     )
     db.add(novo)
     db.flush()

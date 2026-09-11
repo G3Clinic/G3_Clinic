@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Landmark, ArrowUpCircle, ArrowDownCircle, Lock, DollarSign, Wallet, Unlock, Clock, Search, User, Users } from 'lucide-react';
+import { Landmark, ArrowUpCircle, ArrowDownCircle, Lock, DollarSign, Wallet, Unlock, Clock, Search, User, Users, Undo2 } from 'lucide-react';
 import { PageHeader, Card, Btn, StatsCard, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
-import { caixaLancamentosApi, caixaApi, usuariosApi, fechamentosApi, type APICaixaLancamento, type APIUsuario } from '../../../services/api';
+import { caixaLancamentosApi, caixaApi, usuariosApi, fechamentosApi, estornarLancamentoCaixa, type APICaixaLancamento, type APIUsuario } from '../../../services/api';
 import { useAuth } from '../../../contexts/AuthContext';
 
 const PAGAMENTOS = ['Dinheiro', 'PIX', 'Cartão de Crédito', 'Cartão de Débito'];
@@ -78,6 +78,14 @@ export function CaixaPage() {
     } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao fechar o caixa.'); }
   };
   
+  const estornar = async (l: APICaixaLancamento) => {
+    if (!confirm(`Estornar "${l.descricao}" (R$ ${(l.valor ?? 0).toFixed(2)})? Isso lança uma saída de mesmo valor — nada é apagado.`)) return;
+    try {
+      await estornarLancamentoCaixa(l.id);
+      carregar();
+    } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao estornar.'); }
+  };
+
   const fecharCaixaProfissional = async (medico_id: string) => {
     if (!confirm('Gerar termo de fechamento e enviar para o aplicativo do médico? Isso criará um registro assinado digitalmente por você.')) return;
     try {
@@ -238,15 +246,29 @@ export function CaixaPage() {
                   <th className="text-left px-4 py-3 text-xs font-bold text-slate-500">Descrição</th>
                   <th className="text-left px-4 py-3 text-xs font-bold text-slate-500">Forma PGTO</th>
                   <th className="text-right px-4 py-3 text-xs font-bold text-slate-500">Valor</th>
+                  <th className="text-right px-4 py-3 text-xs font-bold text-slate-500 print:hidden">Ações</th>
                 </tr></thead>
                 <tbody className="divide-y divide-gray-50">
-                  {doDia.length === 0 ? <tr><td colSpan={4} className="text-center py-10 text-slate-400">Nenhum lançamento hoje.</td></tr>
+                  {doDia.length === 0 ? <tr><td colSpan={5} className="text-center py-10 text-slate-400">Nenhum lançamento hoje.</td></tr>
                     : doDia.map(l => (
-                      <tr key={l.id} className="hover:bg-gray-50">
+                      <tr key={l.id} className={`hover:bg-gray-50 ${l.estornado ? 'opacity-50' : ''}`}>
                         <td className="px-4 py-3 text-slate-500 text-xs font-mono">{l.criado_em ? new Date(l.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                        <td className="px-4 py-3 font-medium text-slate-700">{l.descricao}</td>
+                        <td className="px-4 py-3 font-medium text-slate-700">
+                          <div className="flex items-center gap-2">
+                            {l.descricao}
+                            {l.estornado && <Badge color="gray">Estornado</Badge>}
+                          </div>
+                        </td>
                         <td className="px-4 py-3"><Badge color={l.forma_pagamento === 'PIX' ? 'green' : l.forma_pagamento?.includes('Cartão') ? 'blue' : 'gray'}>{l.forma_pagamento}</Badge></td>
                         <td className={`px-4 py-3 text-right font-bold ${l.tipo === 'SAIDA' ? 'text-red-500' : 'text-emerald-600'}`}>{l.tipo === 'SAIDA' ? '- ' : '+ '}R$ {(l.valor ?? 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right print:hidden">
+                          {!isProfissional && l.tipo === 'ENTRADA' && !l.estornado && (
+                            <button onClick={() => estornar(l)} title="Estornar (lança uma saída de mesmo valor)"
+                              className="inline-flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg px-2 py-1">
+                              <Undo2 size={13} /> Estornar
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                 </tbody>
