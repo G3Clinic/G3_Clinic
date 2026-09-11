@@ -74,6 +74,14 @@ export function RelatoriosPage() {
   const nomeUsuario = (id?: string | null) => usuarios.find(u => u.id === id)?.nome || '—';
   const nomeProc = (id?: string | null) => procedimentos.find(p => p.id === id)?.nome || '—';
   const nomeConv = (id?: number | null) => convenios.find(c => c.id === id)?.nome || 'Particular';
+  // Recebimento não guarda profissional_id direto — vem do agendamento vinculado.
+  // Recebimentos avulsos/de orçamento (sem agendamento_id) não têm como saber o
+  // profissional por aqui.
+  const profDoRecebimento = (r: APIRecebimento) => {
+    if (!r.agendamento_id) return '—';
+    const ag = ags.find(a => a.id === r.agendamento_id);
+    return ag ? nomeProf(ag.profissional_id) : '—';
+  };
   const fmtData = (d?: string | null) => d ? d.split('-').reverse().join('/') : '—';
 
   // Financeiro: resumo por forma de pagamento
@@ -212,18 +220,28 @@ export function RelatoriosPage() {
     { id: 'laboratorio', label: 'Laboratório', icon: Microscope },
   ];
 
+  const nomeTabAtiva = tabs.find(t => t.id === activeTab)?.label || '';
+  const exportarPdf = () => window.print();
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
         <PageHeader icon={BarChart} title="Relatórios" subtitle="Faturamento, atendimentos e produção por período" />
         <div className="flex gap-2">
-          <Btn icon={RefreshCcw} variant="secondary">Atualizar</Btn>
-          <Btn icon={FileText} className="bg-red-600 hover:bg-red-700 text-white border-red-600">Exportar PDF</Btn>
+          <Btn icon={RefreshCcw} variant="secondary" onClick={carregar}>Atualizar</Btn>
+          <Btn icon={FileText} className="bg-red-600 hover:bg-red-700 text-white border-red-600" onClick={exportarPdf}>Exportar PDF</Btn>
         </div>
       </div>
 
+      {/* Cabeçalho só de impressão — a Sidebar/Topbar já somem via print:hidden no layout,
+          mas os filtros e a barra de abas são nossos e também não fazem sentido no papel. */}
+      <div className="hidden print:block mb-6">
+        <h1 className="text-2xl font-bold">Relatório — {nomeTabAtiva}</h1>
+        <p className="text-slate-500">Período: {fmtData(de)} a {fmtData(ate)} — gerado em {new Date().toLocaleString('pt-BR')}</p>
+      </div>
+
       {/* Filtros Completos */}
-      <Card padding={false} className="bg-white border-gray-200 shadow-sm mb-4">
+      <Card padding={false} className="bg-white border-gray-200 shadow-sm mb-4 print:hidden">
         <div className="p-4 border-b border-gray-100 flex gap-2">
           <Btn variant="secondary" onClick={() => { setDe(hojeISO()); setAte(hojeISO()); }}>Hoje</Btn>
           <Btn variant="secondary" onClick={() => { 
@@ -263,7 +281,7 @@ export function RelatoriosPage() {
       </div>
 
       {/* Navegação de Abas */}
-      <div className="flex overflow-x-auto gap-2 border-b border-gray-200 pb-px">
+      <div className="flex overflow-x-auto gap-2 border-b border-gray-200 pb-px print:hidden">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -333,7 +351,7 @@ export function RelatoriosPage() {
                       <tr key={r.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-slate-500">{fmtData(r.data_recebimento || r.data_vencimento)}</td>
                         <td className="px-4 py-3 font-medium text-slate-700">{nomePac(r.paciente_id)}</td>
-                        <td className="px-4 py-3 text-slate-500">—</td>
+                        <td className="px-4 py-3 text-slate-500">{profDoRecebimento(r)}</td>
                         <td className="px-4 py-3 text-slate-500">{r.descricao || '—'}</td>
                         <td className="px-4 py-3 text-slate-500">{nomeConv(r.convenio_id)}</td>
                         <td className="px-4 py-3 text-slate-500">{r.forma_pagamento || '—'}</td>
@@ -582,17 +600,19 @@ export function RelatoriosPage() {
                 <tr>
                   <th className="px-3 py-2">Data</th>
                   <th className="px-3 py-2">Paciente</th>
+                  <th className="px-3 py-2">Profissional</th>
                   <th className="px-3 py-2">Convênio</th>
                   <th className="px-3 py-2">Forma</th>
                   <th className="px-3 py-2 text-right">Valor</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {recsF.length === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-slate-400">Nenhum recebimento no período.</td></tr>
+                {recsF.length === 0 ? <tr><td colSpan={6} className="px-3 py-8 text-center text-slate-400">Nenhum recebimento no período.</td></tr>
                   : recsF.map(r => (
                     <tr key={r.id}>
                       <td className="px-3 py-2 text-slate-500">{fmtData(r.data_recebimento || r.data_vencimento)}</td>
                       <td className="px-3 py-2 font-medium text-slate-700">{nomePac(r.paciente_id)}</td>
+                      <td className="px-3 py-2 text-slate-500">{profDoRecebimento(r)}</td>
                       <td className="px-3 py-2 text-slate-500">{nomeConv(r.convenio_id)}</td>
                       <td className="px-3 py-2 text-slate-500">{r.forma_pagamento || '—'}</td>
                       <td className="px-3 py-2 text-right font-mono text-emerald-700">{brl(r.valor || 0)}</td>
@@ -600,7 +620,7 @@ export function RelatoriosPage() {
                   ))}
               </tbody>
               {recsF.length > 0 && (
-                <tfoot><tr className="border-t border-gray-200"><td colSpan={4} className="px-3 py-2 font-bold text-slate-800">Total</td><td className="px-3 py-2 text-right font-bold text-emerald-700">{brl(fatBruto)}</td></tr></tfoot>
+                <tfoot><tr className="border-t border-gray-200"><td colSpan={5} className="px-3 py-2 font-bold text-slate-800">Total</td><td className="px-3 py-2 text-right font-bold text-emerald-700">{brl(fatBruto)}</td></tr></tfoot>
               )}
             </table>
           </div>

@@ -100,6 +100,7 @@ export function ProntuarioPage() {
     (html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90) || 'Evolução clínica';
   const [modelos, setModelos] = useState<APIModeloProntuario[]>([]);
   const [modeloSel, setModeloSel] = useState('');
+  const [modeloSelEnc, setModeloSelEnc] = useState('');
   // Gerenciamento de modelos (criar/editar/excluir)
   const [gerenciarOpen, setGerenciarOpen] = useState(false);
   const [modeloEditId, setModeloEditId] = useState<string | null>(null);
@@ -125,6 +126,24 @@ export function ProntuarioPage() {
       return;
     }
     setNovaEvolucao(html);
+  };
+
+  // Encaminhamento reaproveita a mesma biblioteca de modelos da Evolução —
+  // dá pra cadastrar laudos prontos (aposentadoria/incapacidade, USG, ECG etc.)
+  // como modelos e reaplicar em qualquer atendimento, em vez de reescrever
+  // ou depender do único template fixo que existia antes.
+  const aplicarModeloEncaminhamento = (id: string) => {
+    setModeloSelEnc(id);
+    if (!id) return;
+    const m = modelos.find(x => x.id === id);
+    if (!m) return;
+    const html = htmlDoModelo(m);
+    const temConteudo = encaminhamento.replace(/<[^>]*>/g, '').trim().length > 0;
+    if (temConteudo && !window.confirm('Substituir o conteúdo atual do encaminhamento pelo modelo selecionado?')) {
+      setModeloSelEnc('');
+      return;
+    }
+    setEncaminhamento(html);
   };
 
   // ── CRUD de modelos ──────────────────────────────────
@@ -692,15 +711,25 @@ export function ProntuarioPage() {
             {activeTab === 'encaminhamento' && (
               <div className="space-y-5 animate-fade-in-up">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-bold text-slate-500">Modelo:</span>
                   <Btn size="sm" variant="outline" onClick={modeloEncaminhamento}>Encaminhamento padrão</Btn>
-                  <span className="text-[11px] text-slate-400">— já preenche o nome do paciente</span>
+                  <span className="text-[11px] text-slate-400 mr-2">— já preenche o nome do paciente</span>
+                  <div className="flex items-center gap-1.5">
+                    <BookText size={14} className="text-brand-primary" />
+                    <select value={modeloSelEnc} onChange={e => aplicarModeloEncaminhamento(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-brand-primary bg-white max-w-[220px]">
+                      <option value="">Carregar modelo/laudo…</option>
+                      {modelos.map(m => <option key={m.id} value={m.id}>{m.titulo || 'Sem título'}</option>)}
+                    </select>
+                  </div>
+                  <Btn size="sm" variant="outline" icon={Save} onClick={() => abrirGerenciarModelos(encaminhamento)}>Salvar como modelo</Btn>
+                  <Btn size="sm" variant="ghost" icon={Settings} onClick={() => { novoModelo(); setGerenciarOpen(true); }}>Gerenciar</Btn>
                 </div>
+                <p className="text-[11px] text-slate-400 -mt-3">Os modelos são compartilhados com a aba Evolução Clínica — cadastre aqui laudos prontos (aposentadoria/incapacidade, USG, ECG etc.) pra reaproveitar depois, em vez de reescrever a cada atendimento.</p>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Texto do Encaminhamento</label>
                   <div className="bg-white rounded-xl overflow-hidden border border-gray-200">
                     <ReactQuill theme="snow" value={encaminhamento} onChange={setEncaminhamento} modules={QUILL_MODULES}
-                      className="h-56 mb-12" placeholder="Escolha o modelo acima ou escreva o encaminhamento…" />
+                      className="h-56 mb-12" placeholder="Escolha um modelo acima ou escreva o encaminhamento/laudo…" />
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">

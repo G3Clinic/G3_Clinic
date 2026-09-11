@@ -126,27 +126,40 @@ export function OdontogramaPage() {
   // ── Anamnese Odontológica (pré-cadastrada) ──
   type RespostaAnamnese = { resposta: boolean | null; detalhe: string };
   const [anamneseAtual, setAnamneseAtual] = useState<APIAnamneseOdonto | null>(null);
+  // Todas as avaliações do paciente, mais recente primeiro — antes só a
+  // última era carregada, e cada "Salvar" fazia UPDATE nela, apagando o
+  // histórico. Agora salvar sempre cria uma avaliação nova (preserva a
+  // anterior) e esta lista alimenta o "Ver Histórico" no modal.
+  const [anamnesesDoPaciente, setAnamnesesDoPaciente] = useState<APIAnamneseOdonto[]>([]);
   const [modalAnamneseOpen, setModalAnamneseOpen] = useState(false);
   const [respostasAnamnese, setRespostasAnamnese] = useState<Record<string, RespostaAnamnese>>({});
+  const [motivoAnamnese, setMotivoAnamnese] = useState('');
   const [salvandoAnamnese, setSalvandoAnamnese] = useState(false);
+  const [historicoAnamneseAberto, setHistoricoAnamneseAberto] = useState<string | null>(null);
 
   const carregarAnamnese = useCallback((pid: string) => {
-    if (!pid) { setAnamneseAtual(null); return; }
+    if (!pid) { setAnamneseAtual(null); setAnamnesesDoPaciente([]); return; }
     anamneseOdontoApi.listar().then(todas => {
       const doPac = todas
         .filter(a => String(a.paciente_id) === pid)
         .sort((a, b) => (b.data_avaliacao || '').localeCompare(a.data_avaliacao || ''));
+      setAnamnesesDoPaciente(doPac);
       setAnamneseAtual(doPac[0] || null);
-    }).catch(() => setAnamneseAtual(null));
+    }).catch(() => { setAnamneseAtual(null); setAnamnesesDoPaciente([]); });
   }, []);
   useEffect(() => { carregarAnamnese(pacienteId); }, [pacienteId, carregarAnamnese]);
 
   const alertasAnamnese = ODONTO_ANAMNESE_QUESTIONS.filter(q => q.alerta && anamneseAtual?.respostas?.[q.id]?.resposta === true);
 
   const abrirModalAnamnese = () => {
+    // Sempre começa em branco (é uma NOVA avaliação) — quem quiser ver o que
+    // foi respondido antes usa o "Ver Histórico" logo abaixo, sem se arriscar
+    // a editar/perder o registro anterior por engano.
     const base: Record<string, RespostaAnamnese> = {};
-    ODONTO_ANAMNESE_QUESTIONS.forEach(q => { base[q.id] = anamneseAtual?.respostas?.[q.id] || { resposta: null, detalhe: '' }; });
+    ODONTO_ANAMNESE_QUESTIONS.forEach(q => { base[q.id] = { resposta: null, detalhe: '' }; });
     setRespostasAnamnese(base);
+    setMotivoAnamnese('');
+    setHistoricoAnamneseAberto(null);
     setModalAnamneseOpen(true);
   };
   const setRespostaAnamnese = (id: string, resposta: boolean) => setRespostasAnamnese(prev => ({ ...prev, [id]: { ...prev[id], resposta } }));
@@ -154,11 +167,14 @@ export function OdontogramaPage() {
 
   const salvarAnamnese = async () => {
     if (!paciente) return;
+    if (!motivoAnamnese.trim()) { alert('Descreva o motivo desta avaliação (obrigatório para respaldo do atendimento).'); return; }
     setSalvandoAnamnese(true);
     try {
-      const payload = { paciente_id: paciente.id, respostas: respostasAnamnese, data_avaliacao: new Date().toISOString() };
-      if (anamneseAtual) await anamneseOdontoApi.atualizar(anamneseAtual.id, payload);
-      else await anamneseOdontoApi.criar(payload);
+      // Sempre cria uma avaliação nova — nunca sobrescreve uma anterior.
+      await anamneseOdontoApi.criar({
+        paciente_id: paciente.id, respostas: respostasAnamnese,
+        motivo: motivoAnamnese.trim(), data_avaliacao: new Date().toISOString(),
+      });
       setModalAnamneseOpen(false);
       carregarAnamnese(pacienteId);
     } catch (e) { alert(e instanceof Error ? e.message : 'Erro ao salvar anamnese.'); }
@@ -630,6 +646,54 @@ export function OdontogramaPage() {
       {modalAnamneseOpen && paciente && (
         <Modal open={modalAnamneseOpen} onClose={() => setModalAnamneseOpen(false)} title={`Anamnese Odontológica — ${paciente.nome}`} maxWidth="max-w-3xl">
           <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-1">Motivo desta avaliação *</label>
+              <textarea value={motivoAnamnese} onChange={e => setMotivoAnamnese(e.target.value)} rows={2}
+                placeholder="Ex: Retorno pós-operatório, avaliação inicial, dor no dente 26…"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/20" />
+              <p className="text-[10px] text-slate-400 mt-1">Obrigatório — registra por que esta avaliação foi feita, para respaldo do atendimento e para você (ou outro profissional) entender o raciocínio depois.</p>
+            </div>
+
+            {anamnesesDoPaciente.length > 0 && (
+              <div className="border border-gray-100 rounded-xl overflow-hidden">
+                <div className="bg-gray-50 px-3 py-2">
+                  <p className="text-xs font-bold text-slate-600">Histórico de Avaliações ({anamnesesDoPaciente.length})</p>
+                </div>
+                <div className="divide-y divide-gray-50 max-h-48 overflow-y-auto">
+                  {anamnesesDoPaciente.map(a => {
+                    const aberto = historicoAnamneseAberto === a.id;
+                    const respondidas = ODONTO_ANAMNESE_QUESTIONS.filter(q => a.respostas?.[q.id]?.resposta !== null && a.respostas?.[q.id]?.resposta !== undefined);
+                    return (
+                      <div key={a.id}>
+                        <button onClick={() => setHistoricoAnamneseAberto(aberto ? null : a.id)} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-left">
+                          {aberto ? <ChevronDown size={14} className="text-slate-400 shrink-0" /> : <ChevronRight size={14} className="text-slate-400 shrink-0" />}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-bold text-slate-600">{a.data_avaliacao ? new Date(a.data_avaliacao).toLocaleString('pt-BR') : '—'}</p>
+                            <p className="text-[11px] text-slate-500 truncate">{a.motivo || <span className="italic text-slate-300">Sem motivo registrado</span>}</p>
+                          </div>
+                        </button>
+                        {aberto && (
+                          <div className="px-4 pb-3 space-y-1.5 border-t border-gray-50 pt-2">
+                            {respondidas.length === 0 ? <p className="text-[11px] text-slate-400 italic">Nenhuma pergunta respondida com Sim/Não.</p>
+                              : respondidas.map(q => {
+                                const r = a.respostas?.[q.id];
+                                return (
+                                  <div key={q.id} className="text-[11px] flex items-start gap-2">
+                                    <span className={`shrink-0 font-bold ${r?.resposta ? 'text-red-500' : 'text-emerald-600'}`}>{r?.resposta ? 'Sim' : 'Não'}</span>
+                                    <span className="text-slate-600">{q.texto}{r?.detalhe ? ` — ${r.detalhe}` : ''}</span>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs font-bold text-slate-700 pt-2 border-t border-gray-100">Nova avaliação</p>
             {ODONTO_ANAMNESE_QUESTIONS.map(q => {
               const r = respostasAnamnese[q.id] || { resposta: null, detalhe: '' };
               return (
@@ -655,7 +719,7 @@ export function OdontogramaPage() {
             <p className="text-[11px] text-slate-400">{anamneseAtual?.data_avaliacao ? `Última avaliação: ${new Date(anamneseAtual.data_avaliacao).toLocaleString('pt-BR')}` : 'Ainda não avaliado.'}</p>
             <div className="flex gap-2">
               <Btn variant="ghost" onClick={() => setModalAnamneseOpen(false)}>Cancelar</Btn>
-              <Btn icon={Save} disabled={salvandoAnamnese} onClick={salvarAnamnese}>{salvandoAnamnese ? 'Salvando...' : 'Salvar Anamnese'}</Btn>
+              <Btn icon={Save} disabled={salvandoAnamnese} onClick={salvarAnamnese}>{salvandoAnamnese ? 'Salvando...' : 'Registrar Nova Avaliação'}</Btn>
             </div>
           </div>
         </Modal>

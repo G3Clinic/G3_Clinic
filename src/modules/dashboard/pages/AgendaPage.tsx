@@ -180,21 +180,60 @@ export function AgendaPage() {
   };
 
   // Criação rápida de paciente dentro do modal de agendamento
+  // Endereço completo é exigido aqui (não só em Pacientes) porque a Prescrição
+  // Digital da Memed recusa emitir sem logradouro/bairro/cidade/UF — cadastrar
+  // rápido sem isso só empurra o bloqueio pra hora de prescrever.
+  const novoPacVazio = { nome: '', cpf: '', telefone: '', data_nascimento: '', sexo: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' };
   const [novoPacOpen, setNovoPacOpen] = useState(false);
-  const [novoPac, setNovoPac] = useState({ nome: '', cpf: '', telefone: '', data_nascimento: '', sexo: '' });
+  const [novoPac, setNovoPac] = useState(novoPacVazio);
   const [salvandoPac, setSalvandoPac] = useState(false);
   const [erroPac, setErroPac] = useState('');
+  const [buscandoCepPac, setBuscandoCepPac] = useState(false);
+  const [cepErroPac, setCepErroPac] = useState('');
   const setNP = (c: keyof typeof novoPac, v: string) => setNovoPac(prev => ({ ...prev, [c]: v }));
 
+  const onCepChangePac = (valor: string) => {
+    const digitos = valor.replace(/\D/g, '').slice(0, 8);
+    const formatado = digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
+    setNP('cep', formatado);
+    setCepErroPac('');
+    if (digitos.length === 8) buscarCepPac(digitos);
+  };
+  const buscarCepPac = async (cep8: string) => {
+    setBuscandoCepPac(true);
+    setCepErroPac('');
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep8}/json/`);
+      const data = await res.json();
+      if (data.erro) { setCepErroPac('CEP não encontrado.'); return; }
+      setNovoPac(prev => ({
+        ...prev,
+        logradouro: data.logradouro || prev.logradouro,
+        bairro: data.bairro || prev.bairro,
+        cidade: data.localidade || prev.cidade,
+        uf: data.uf || prev.uf,
+        complemento: prev.complemento || data.complemento || '',
+      }));
+    } catch {
+      setCepErroPac('Não foi possível consultar o CEP.');
+    } finally {
+      setBuscandoCepPac(false);
+    }
+  };
+
   const abrirNovoPaciente = () => {
-    setNovoPac({ nome: '', cpf: '', telefone: '', data_nascimento: '', sexo: '' });
-    setErroPac(''); setNovoPacOpen(true);
+    setNovoPac(novoPacVazio);
+    setErroPac(''); setCepErroPac(''); setNovoPacOpen(true);
   };
 
   const salvarNovoPaciente = async () => {
     setErroPac('');
     if (!novoPac.nome.trim()) { setErroPac('Nome é obrigatório.'); return; }
     if (!cpfValido(novoPac.cpf)) { setErroPac('CPF inválido.'); return; }
+    if (!novoPac.logradouro.trim() || !novoPac.bairro.trim() || !novoPac.cidade.trim() || !novoPac.uf.trim()) {
+      setErroPac('Endereço completo (Rua, Bairro, Cidade e UF) é obrigatório — a Memed exige isso para emitir prescrição digital depois.');
+      return;
+    }
     setSalvandoPac(true);
     try {
       const criado = await pacientesApi.criar({
@@ -202,6 +241,13 @@ export function AgendaPage() {
         telefone: novoPac.telefone.trim() || undefined,
         data_nascimento: novoPac.data_nascimento || undefined,
         sexo: novoPac.sexo || undefined,
+        cep: novoPac.cep.trim() || undefined,
+        logradouro: novoPac.logradouro.trim() || undefined,
+        numero: novoPac.numero.trim() || undefined,
+        complemento: novoPac.complemento.trim() || undefined,
+        bairro: novoPac.bairro.trim() || undefined,
+        cidade: novoPac.cidade.trim() || undefined,
+        uf: novoPac.uf.trim() || undefined,
       });
       // recarrega a lista e já seleciona o novo paciente no agendamento
       const lista = await pacientesApi.listar();
@@ -679,7 +725,28 @@ export function AgendaPage() {
               <option value="F">Feminino</option>
             </SelectField>
           </div>
-          <p className="text-[11px] text-slate-500">Dados essenciais para agendar. Você pode completar o cadastro depois em Pacientes.</p>
+
+          <div className="pt-2 border-t border-gray-100">
+            <p className="text-xs font-bold text-slate-600 mb-2">Endereço *</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <InputField label={buscandoCepPac ? 'CEP (buscando...)' : 'CEP'} placeholder="00000-000" maxLength={9} value={novoPac.cep} onChange={e => onCepChangePac(e.target.value)} />
+                {cepErroPac && <p className="text-[11px] text-amber-600 mt-1">{cepErroPac}</p>}
+              </div>
+              <InputField label="Número" placeholder="Nº" value={novoPac.numero} onChange={e => setNP('numero', e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <InputField label="Logradouro *" required placeholder="Rua/Av." value={novoPac.logradouro} onChange={e => setNP('logradouro', e.target.value)} />
+              <InputField label="Complemento" placeholder="Apto, bloco..." value={novoPac.complemento} onChange={e => setNP('complemento', e.target.value)} />
+            </div>
+            <div className="grid grid-cols-3 gap-4 mt-4">
+              <InputField label="Bairro *" required value={novoPac.bairro} onChange={e => setNP('bairro', e.target.value)} />
+              <InputField label="Cidade *" required value={novoPac.cidade} onChange={e => setNP('cidade', e.target.value)} />
+              <InputField label="UF *" required maxLength={2} placeholder="SP" value={novoPac.uf} onChange={e => setNP('uf', e.target.value.toUpperCase())} />
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-500">Endereço é obrigatório porque a Memed exige isso para emitir prescrição digital — sem preencher agora, o cadastro fica incompleto e trava na hora de prescrever.</p>
           {erroPac && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{erroPac}</div>}
           <div className="pt-4 flex justify-end gap-3 border-t border-gray-100">
             <Btn variant="ghost" onClick={() => setNovoPacOpen(false)}>Cancelar</Btn>

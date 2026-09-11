@@ -594,6 +594,7 @@ export const modelosProntuarioApi = crudApi<APIModeloProntuario>('modelos_prontu
 export interface APIAnamneseOdonto {
   id: string; paciente_id?: number | null; profissional_id?: string | null;
   respostas?: Record<string, { resposta: boolean | null; detalhe: string }> | null;
+  motivo?: string | null;
   data_avaliacao?: string | null;
 }
 export const anamneseOdontoApi = crudApi<APIAnamneseOdonto>('anamnese_odonto');

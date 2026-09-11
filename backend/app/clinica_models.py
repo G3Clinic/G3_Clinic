@@ -223,6 +223,10 @@ class AnamneseOdonto(Base, TenantMixin):
     paciente_id = Column(Integer, nullable=True)
     profissional_id = Column(String, nullable=True)
     respostas = Column(JSON, nullable=True)
+    # Motivo/descrição da avaliação — a anamnese é a triagem, mas todo
+    # procedimento/consulta precisa de um motivo registrado (respaldo jurídico
+    # e pra o profissional lembrar o raciocínio clínico de cada avaliação).
+    motivo = Column(Text, nullable=True)
     data_avaliacao = Column(DateTime, default=datetime.utcnow)
 
 
