@@ -54,9 +54,71 @@ app.include_router(fechamentos_router)
 app.include_router(relatorios_financeiros_router)
 app.include_router(financeiro_router)
 
+def _eh_admin(user) -> bool:
+    return bool(getattr(user, "is_dono", False) or getattr(user, "role", None) == "administrador")
+
+
+# --- Regra extra: modelos_prontuario ---------------------------------------
+# Modelo salvo por dono/administrador vale para todos os usuários da empresa
+# ("global"); modelo salvo por qualquer outro usuário é pessoal (só ele vê,
+# edita e exclui). Registros antigos (criados antes desta regra, sem
+# tipo_acesso definido) continuam visíveis a todos — não "somem" da lista.
+def _filtro_modelos_prontuario(query, user):
+    if _eh_admin(user):
+        return query
+    Modelo = clinica_models.ModeloProntuario
+    return query.filter(
+        (Modelo.tipo_acesso.is_(None))
+        | (Modelo.tipo_acesso == "global")
+        | (Modelo.profissional_id == str(user.id))
+    )
+
+
+def _before_create_modelo_prontuario(dados: dict, user) -> dict:
+    dados = dict(dados)
+    if _eh_admin(user):
+        dados["tipo_acesso"] = "global"
+        dados["profissional_id"] = None
+    else:
+        dados["tipo_acesso"] = "pessoal"
+        dados["profissional_id"] = str(user.id)
+    return dados
+
+
+def _check_write_modelo_prontuario(obj, user) -> None:
+    if _eh_admin(user):
+        return
+    dono = obj.profissional_id is not None and str(obj.profissional_id) == str(user.id)
+    if not dono:
+        raise HTTPException(status_code=403, detail="Você só pode alterar ou excluir os seus próprios modelos.")
+
+
+# --- Regra extra: agendamentos — sala é obrigatória -------------------------
+# No create, o registro precisa ter sala. No update, só cobra sala se o
+# próprio agendamento estiver sendo movido de sala (campo enviado nesta
+# chamada) — assim não trava updates simples (ex.: mudar status) em
+# agendamentos antigos que porventura não tinham sala.
+def _validar_agendamento(dados: dict, user, *, is_partial: bool = False) -> None:
+    if is_partial:
+        if "sala_id" in dados and not dados.get("sala_id"):
+            raise HTTPException(status_code=400, detail="Sala é obrigatória para o agendamento.")
+    else:
+        if not dados.get("sala_id"):
+            raise HTTPException(status_code=400, detail="Sala é obrigatória para o agendamento.")
+
+
+_HOOKS_POR_PREFIXO = {
+    "modelos_prontuario": dict(
+        extra_filter=_filtro_modelos_prontuario,
+        before_create=_before_create_modelo_prontuario,
+        check_write=_check_write_modelo_prontuario,
+    ),
+    "agendamentos": dict(validate=_validar_agendamento),
+}
+
 # CRUD completo, multi-tenant e protegido por módulo, de todas as tabelas.
 for _model, _prefix, _modulo in clinica_models.CRUD_MODELS:
-    app.include_router(make_crud_router(_model, _prefix, _modulo))
+    app.include_router(make_crud_router(_model, _prefix, _modulo, **_HOOKS_POR_PREFIXO.get(_prefix, {})))
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -417,24 +479,32 @@ def _processar_repasse_medico(db: Session, user, ag_id, valor, nome_pac, forma_p
         db.flush()
 
 def _processar_repasse_recepcao(db: Session, user, ag_id, valor, nome_pac, forma_pagamento):
-    """Verifica se a recepcionista possui repasse por consulta e lança SAÍDA no caixa do dia."""
+    """Verifica se a recepcionista possui repasse por consulta e lança SAÍDA no caixa do dia.
+    Soma TODAS as regras "por Consulta" cadastradas pra essa recepcionista — uma
+    recepcionista pode ter mais de uma ativa ao mesmo tempo (ex.: percentual + fixo, ou
+    uma nova cadastrada sem excluir a antiga). Antes isto usava .first() sem nenhum
+    critério de ordenação, então com mais de uma regra cadastrada o sistema aplicava
+    uma delas arbitrariamente e ignorava as demais silenciosamente."""
     ag = db.query(clinica_models.Agendamento).filter(clinica_models.Agendamento.id == ag_id).first()
     if not ag or not ag.criado_por:
         return
-    
-    rep = db.query(clinica_models.RepasseRecepcionista).filter(
+
+    regras = db.query(clinica_models.RepasseRecepcionista).filter(
         clinica_models.RepasseRecepcionista.recepcionista_id == ag.criado_por
-    ).first()
-    if not rep or not rep.valor:
-        return
-        
-    tipo = rep.tipo or ""
-    repasse_final = 0
-    if "Percentual" in tipo:
-        repasse_final = (valor or 0) * (rep.valor / 100.0)
-    elif "por Consulta" in tipo and "Fixo" in tipo:
-        repasse_final = rep.valor
-        
+    ).all()
+
+    repasse_final = 0.0
+    for rep in regras:
+        if not rep.valor:
+            continue
+        tipo = rep.tipo or ""
+        if "por Consulta" not in tipo:
+            continue  # "Valor Fixo Mensal" não é disparado por consulta.
+        if "Percentual" in tipo:
+            repasse_final += (valor or 0) * (rep.valor / 100.0)
+        elif "Fixo" in tipo:
+            repasse_final += rep.valor
+
     if repasse_final > 0:
         prof_recep = db.query(clinica_models.PerfilUsuario).filter(clinica_models.PerfilUsuario.id == ag.criado_por).first()
         nome_recep = prof_recep.nome if prof_recep else "Recepção"

@@ -12,9 +12,25 @@ Isolamento (row-level): TODAS as queries são filtradas por empresa_id vindo
 do JWT; o cliente nunca escolhe a empresa. No create, empresa_id do payload
 é ignorado e sobrescrito pelo do token. O acesso ao módulo é exigido via
 require_modulo(modulo).
+
+Alguns modelos precisam de uma regra extra (dono de registro, campo
+obrigatório etc.) sem duplicar o CRUD inteiro — para isso, make_crud_router
+aceita hooks opcionais (todos None por padrão = comportamento inalterado
+para os demais ~40 modelos que usam o CRUD genérico puro):
+
+  extra_filter(query, user)                     -> query adicional na listagem/leitura
+  before_create(dados, user)                    -> pode mutar/whitelistar campos antes do INSERT
+  validate(dados, user, *, is_partial)           -> levanta HTTPException se inválido.
+                                                     No create, dados = registro completo,
+                                                     is_partial=False. No update, dados = só
+                                                     os campos enviados nessa chamada,
+                                                     is_partial=True (permite ao hook ignorar
+                                                     updates que não tocam no campo da regra).
+  check_write(obj, user)                        -> levanta HTTPException(403) se o usuário
+                                                     não pode alterar/excluir aquele registro
 """
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 from sqlalchemy import Date, DateTime, Integer
@@ -77,7 +93,16 @@ def _cast_pk(model, pk_name: str, raw: str):
 _SEM_FILTRO_DE_UNIDADE_NA_LISTAGEM = {"atendimentos_clinicos"}
 
 
-def make_crud_router(model, prefix: str, modulo: str) -> APIRouter:
+def make_crud_router(
+    model,
+    prefix: str,
+    modulo: str,
+    *,
+    extra_filter: Optional[Callable[[Any, Any], Any]] = None,
+    before_create: Optional[Callable[[dict, Any], dict]] = None,
+    validate: Optional[Callable[[dict, Any], None]] = None,
+    check_write: Optional[Callable[[Any, Any], None]] = None,
+) -> APIRouter:
     router = APIRouter(prefix=f"/api/{prefix}", tags=[prefix])
     columns = {c.name for c in model.__table__.columns}
     pk_name = list(model.__table__.primary_key.columns)[0].name
@@ -91,12 +116,15 @@ def make_crud_router(model, prefix: str, modulo: str) -> APIRouter:
             if k in columns and k != "empresa_id"
         }
 
-    def _scoped(db: Session, empresa_id: int):
-        return db.query(model).filter(model.empresa_id == empresa_id)
+    def _scoped(db: Session, user) -> Any:
+        query = db.query(model).filter(model.empresa_id == user.empresa_id)
+        if extra_filter is not None:
+            query = extra_filter(query, user)
+        return query
 
-    def _get_own(db: Session, empresa_id: int, item_id: str):
+    def _get_own(db: Session, user, item_id: str):
         obj = db.get(model, _cast_pk(model, pk_name, item_id))
-        if obj is None or obj.empresa_id != empresa_id:
+        if obj is None or obj.empresa_id != user.empresa_id:
             raise HTTPException(status_code=404, detail="Registro não encontrado")
         return obj
 
@@ -107,7 +135,7 @@ def make_crud_router(model, prefix: str, modulo: str) -> APIRouter:
         db: Session = Depends(get_db),
         x_filial_id: Optional[int] = Header(default=None, alias="X-Filial-Id"),
     ):
-        query = _scoped(db, user.empresa_id)
+        query = _scoped(db, user)
         params = request.query_params
         for key, val in params.items():
             if key in columns and key != "empresa_id":
@@ -131,7 +159,7 @@ def make_crud_router(model, prefix: str, modulo: str) -> APIRouter:
         user: cm.PerfilUsuario = Depends(guard),
         db: Session = Depends(get_db),
     ):
-        return _row_to_dict(_get_own(db, user.empresa_id, item_id))
+        return _row_to_dict(_get_own(db, user, item_id))
 
     @router.post("", status_code=201)
     def criar(
@@ -145,6 +173,10 @@ def make_crud_router(model, prefix: str, modulo: str) -> APIRouter:
         # cliente não tiver definido explicitamente a unidade).
         if "unidade_id" in columns and not dados.get("unidade_id") and x_filial_id is not None:
             dados["unidade_id"] = x_filial_id
+        if before_create is not None:
+            dados = before_create(dados, user)
+        if validate is not None:
+            validate(dados, user, is_partial=False)
         obj = model(**dados)
         obj.empresa_id = user.empresa_id
         db.add(obj)
@@ -159,10 +191,21 @@ def make_crud_router(model, prefix: str, modulo: str) -> APIRouter:
         user: cm.PerfilUsuario = Depends(guard),
         db: Session = Depends(get_db),
     ):
-        obj = _get_own(db, user.empresa_id, item_id)
-        for key, val in _clean(payload).items():
+        obj = _get_own(db, user, item_id)
+        if check_write is not None:
+            check_write(obj, user)
+        limpo = _clean(payload)
+        for key, val in limpo.items():
             if key != pk_name:
                 setattr(obj, key, val)
+        # No update, o validate recebe só os campos enviados nesta chamada
+        # (is_partial=True) — cada hook decide se a regra se aplica quando o
+        # campo em questão nem foi tocado. Isso evita bloquear updates de
+        # registros antigos que já existiam sem satisfazer uma regra
+        # adicionada depois (ex.: sala obrigatória em agendamentos legados
+        # sem sala, ao só mudar o status).
+        if validate is not None:
+            validate(limpo, user, is_partial=True)
         if prefix != "eventos_auditoria":
             registrar_evento(db, user, "alteração", modulo, prefix, item_id, f'Alterou "{_rotulo(obj)}"')
         db.commit()
@@ -175,7 +218,9 @@ def make_crud_router(model, prefix: str, modulo: str) -> APIRouter:
         user: cm.PerfilUsuario = Depends(guard),
         db: Session = Depends(get_db),
     ):
-        obj = _get_own(db, user.empresa_id, item_id)
+        obj = _get_own(db, user, item_id)
+        if check_write is not None:
+            check_write(obj, user)
         if prefix != "eventos_auditoria":
             registrar_evento(db, user, "exclusão", modulo, prefix, item_id, f'Excluiu "{_rotulo(obj)}"')
         db.delete(obj)

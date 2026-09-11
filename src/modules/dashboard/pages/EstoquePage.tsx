@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Package, Plus, Search, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, FolderTree, Box, ArrowRightLeft, ShoppingCart, Link2, Users, Edit, Trash2, Send } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Package, Plus, Search, AlertTriangle, ArrowDownToLine, ArrowUpFromLine, FolderTree, Box, ArrowRightLeft, ShoppingCart, Link2, Users, Edit, Trash2, Send, BarChart3 } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import {
   estoqueCategoriasApi, estoqueProdutosApi, estoqueFornecedoresApi, estoqueMovApi, estoquePedidosApi,
@@ -8,7 +8,7 @@ import {
   type APIEstoquePedido, type APIProcMaterial, type APIOdontoProc, type APISaldo,
 } from '../../../services/api';
 
-type Tab = 'produtos' | 'categorias' | 'fornecedores' | 'movimentacoes' | 'pedidos' | 'vinculos';
+type Tab = 'produtos' | 'categorias' | 'fornecedores' | 'movimentacoes' | 'pedidos' | 'vinculos' | 'abc';
 const UNIDADES_MEDIDA = ['Unidade (un)', 'Caixa (cx)', 'Litros (L)', 'Gramas (g)', 'Metros (m)'];
 
 export function EstoquePage() {
@@ -123,8 +123,45 @@ export function EstoquePage() {
     { id: 'produtos', label: 'Produtos', icon: Box }, { id: 'categorias', label: 'Categorias', icon: FolderTree },
     { id: 'fornecedores', label: 'Fornecedores', icon: Users }, { id: 'movimentacoes', label: 'Movimentações', icon: ArrowRightLeft },
     { id: 'pedidos', label: 'Pedidos de Compra', icon: ShoppingCart }, { id: 'vinculos', label: 'Materiais por Proc.', icon: Link2 },
+    { id: 'abc', label: 'Curva ABC', icon: BarChart3 },
   ];
   const produtosFiltrados = produtos.filter(p => p.nome.toLowerCase().includes(busca.toLowerCase()));
+
+  // ── Curva ABC de estoque ──────────────────────────────────────────────
+  // Classifica cada produto pelo valor total consumido (saídas de estoque), método de
+  // Pareto: ordena do maior pro menor valor e acumula % do total geral —
+  // A = até 80% acumulado (poucos itens, concentram a maior parte do custo — prioridade
+  // de controle), B = de 80% a 95%, C = os 5% finais (muitos itens, baixo impacto).
+  // Saída manual normalmente não registra custo_unitario (só Entrada pede o preço), então
+  // o custo de cada saída é estimado pela média dos custos de Entrada já registrados pro
+  // mesmo produto — não dá pra saber o custo "real" de uma saída sem isso.
+  const curvaABC = useMemo(() => {
+    const custoMedioPorProduto: Record<string, number> = {};
+    produtos.forEach(p => {
+      const entradas = movs.filter(m => m.produto_id === p.id && m.tipo === 'ENTRADA' && m.custo_unitario != null);
+      custoMedioPorProduto[p.id] = entradas.length
+        ? entradas.reduce((acc, m) => acc + (m.custo_unitario || 0), 0) / entradas.length
+        : 0;
+    });
+    const valores = produtos.map(p => {
+      const qtdSaida = movs.filter(m => m.produto_id === p.id && m.tipo === 'SAIDA').reduce((acc, m) => acc + (m.quantidade || 0), 0);
+      const valor = qtdSaida * (custoMedioPorProduto[p.id] || 0);
+      return { produto: p, qtdSaida, valor };
+    }).sort((a, b) => b.valor - a.valor);
+
+    const totalValor = valores.reduce((acc, v) => acc + v.valor, 0) || 1;
+    // Fold funcional (sem reatribuir uma variável externa a cada item) pra acumular o
+    // valor corrido — evita mutação de estado durante o cálculo de render.
+    const { linhas } = valores.reduce<{ acumulado: number; linhas: (typeof valores[number] & { pct: number; pctAcumulado: number; classe: 'A' | 'B' | 'C' })[] }>((estado, v) => {
+      const acumulado = estado.acumulado + v.valor;
+      const pctAcumulado = (acumulado / totalValor) * 100;
+      const classe: 'A' | 'B' | 'C' = pctAcumulado <= 80 ? 'A' : pctAcumulado <= 95 ? 'B' : 'C';
+      return { acumulado, linhas: [...estado.linhas, { ...v, pct: (v.valor / totalValor) * 100, pctAcumulado, classe }] };
+    }, { acumulado: 0, linhas: [] });
+    return linhas;
+  }, [produtos, movs]);
+  const CLASSE_COR: Record<'A' | 'B' | 'C', 'red' | 'yellow' | 'gray'> = { A: 'red', B: 'yellow', C: 'gray' };
+  const contagemClasse = { A: curvaABC.filter(c => c.classe === 'A').length, B: curvaABC.filter(c => c.classe === 'B').length, C: curvaABC.filter(c => c.classe === 'C').length };
 
   return (
     <div className="space-y-6">
@@ -254,6 +291,48 @@ export function EstoquePage() {
                     <button onClick={() => del(() => estoquePedidosApi.excluir(pd.id))} className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg opacity-0 group-hover:opacity-100"><Trash2 size={14} /></button>
                   </div></td></tr>))}
             </tbody></table></div></Card>
+        )}
+
+        {activeTab === 'abc' && (
+          <div className="animate-fade-in-up space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="flex items-center gap-4">
+                <div className="p-3 bg-red-500 text-white rounded-xl shadow-sm"><Badge color="red">A</Badge></div>
+                <div><p className="text-sm text-slate-500 font-bold uppercase tracking-wider">Classe A</p><p className="text-2xl font-black text-slate-800">{contagemClasse.A} <span className="text-xs font-semibold text-slate-400">produto(s)</span></p></div>
+              </Card>
+              <Card className="flex items-center gap-4">
+                <div className="p-3 bg-yellow-500 text-white rounded-xl shadow-sm"><Badge color="yellow">B</Badge></div>
+                <div><p className="text-sm text-slate-500 font-bold uppercase tracking-wider">Classe B</p><p className="text-2xl font-black text-slate-800">{contagemClasse.B} <span className="text-xs font-semibold text-slate-400">produto(s)</span></p></div>
+              </Card>
+              <Card className="flex items-center gap-4">
+                <div className="p-3 bg-gray-400 text-white rounded-xl shadow-sm"><Badge color="gray">C</Badge></div>
+                <div><p className="text-sm text-slate-500 font-bold uppercase tracking-wider">Classe C</p><p className="text-2xl font-black text-slate-800">{contagemClasse.C} <span className="text-xs font-semibold text-slate-400">produto(s)</span></p></div>
+              </Card>
+            </div>
+            <Card title="Curva ABC — produtos por valor consumido">
+              <p className="text-xs text-slate-500 mb-3">Classe A concentra até 80% do valor consumido (prioridade de controle), B de 80% a 95%, C os 5% finais. Valor estimado pelo custo médio das entradas × quantidade de saídas.</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-slate-500 font-semibold border-b border-gray-100">
+                    <tr><th className="px-4 py-3">Classe</th><th className="px-4 py-3">Produto</th><th className="px-4 py-3 text-right">Qtd. Saída</th><th className="px-4 py-3 text-right">Valor Consumido</th><th className="px-4 py-3 text-right">% do Total</th><th className="px-4 py-3 text-right">% Acumulado</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {curvaABC.length === 0 ? <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-400">Sem movimentações de saída registradas ainda.</td></tr>
+                      : curvaABC.map(c => (
+                        <tr key={c.produto.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3"><Badge color={CLASSE_COR[c.classe]}>{c.classe}</Badge></td>
+                          <td className="px-4 py-3 font-medium text-slate-700">{c.produto.nome}</td>
+                          <td className="px-4 py-3 text-right font-mono">{c.qtdSaida}</td>
+                          <td className="px-4 py-3 text-right font-mono">R$ {c.valor.toFixed(2).replace('.', ',')}</td>
+                          <td className="px-4 py-3 text-right text-slate-500">{c.pct.toFixed(1)}%</td>
+                          <td className="px-4 py-3 text-right text-slate-500">{c.pctAcumulado.toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
         )}
 
         {activeTab === 'vinculos' && (

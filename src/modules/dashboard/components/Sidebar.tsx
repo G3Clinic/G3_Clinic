@@ -3,7 +3,7 @@ import { useState } from 'react';
 import {
   Home, Users, Calendar, MonitorPlay, ClipboardList,
   Smile, DollarSign, Package, BarChart2, HeartPulse, Settings, LogOut, X, ChevronDown,
-  Landmark, Database, FileSignature
+  Landmark, Database, FileSignature, FlaskConical
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -200,6 +200,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
             <NavItem icon={FileSignature} label="Meus Fechamentos" to="/dashboard/fechamentos" isCollapsed={isCollapsed} />
           )}
           {temPermissao('estoque') && <NavItem icon={Package} label="Estoque" to="/dashboard/estoque" isCollapsed={isCollapsed} />}
+          {temPermissao('recepcao') && <NavItem icon={FlaskConical} label="Laboratório" to="/dashboard/laboratorio" isCollapsed={isCollapsed} />}
           {temPermissao('relatorios') && <NavItem icon={BarChart2} label="Relatórios" to="/dashboard/relatorios" isCollapsed={isCollapsed} />}
 
           <div className={clsx("text-[10px] font-bold text-slate-400 uppercase tracking-widest px-3 mt-5 mb-2", isCollapsed && "text-center px-0")}>
@@ -230,6 +231,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               <SubNavItem label="Convênios" to="/dashboard/admin/convenios" />
               <SubNavItem label="Tabela de Laboratório" to="/dashboard/admin/dre" />
               <SubNavItem label="Repasses Recepcionistas" to="/dashboard/admin/repasse-recep" />
+              <SubNavItem label="Integrações" to="/dashboard/admin/integracoes" />
               <SubNavItem label="Registro de Atividades (Log)" to="/dashboard/auditoria" />
             </NavGroup>
           )}

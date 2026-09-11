@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Calendar, Plus, Filter, Clock, ChevronLeft, ChevronRight, Save, Trash2, UserPlus } from 'lucide-react';
+import { Calendar, Plus, Filter, Clock, ChevronLeft, ChevronRight, Save, Trash2, UserPlus, CalendarCheck, X } from 'lucide-react';
 import { PageHeader, Card, Btn, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import {
   agendamentosApi, pacientesApi, salasApi, procedimentosApi, conveniosApi, usuariosApi,
@@ -228,6 +228,24 @@ export function AgendaPage() {
   const nomePaciente = (id?: number | null) => pacientes.find(p => p.id === id)?.nome || 'Paciente';
   const nomeProf = (id?: string | null) => profissionais.find(p => p.id === id)?.nome || '';
   const nomeProc = (id?: string | null) => procedimentos.find(p => p.id === id)?.nome || '';
+
+  // Confirmação até 24h antes: agendamentos ainda "Agendado" (não confirmados
+  // nem cancelados) cujo início cai dentro das próximas 24h a partir de agora.
+  const agsPendentesConfirmacao = (() => {
+    const agora = Date.now();
+    const em24h = agora + 24 * 60 * 60 * 1000;
+    return agendamentos
+      .filter(a => (a.status || 'Agendado') === 'Agendado' && a.data_agendamento)
+      .map(a => ({ a, ts: new Date(`${a.data_agendamento}T${a.hora_inicio || '00:00'}:00`).getTime() }))
+      .filter(({ ts }) => !Number.isNaN(ts) && ts >= agora && ts <= em24h)
+      .sort((x, y) => x.ts - y.ts)
+      .map(({ a }) => a);
+  })();
+  const mudarStatusRapido = async (id: string, status: string) => {
+    try { await agendamentosApi.atualizar(id, { status }); carregarAg(); }
+    catch (e) { alert(e instanceof Error ? e.message : 'Erro ao atualizar status.'); }
+  };
+  const confirmarAgendamento = (id: string) => mudarStatusRapido(id, 'Confirmado');
   const corSala = (salaId?: string | null) => {
     const idx = salas.findIndex(s => s.id === salaId);
     return idx >= 0 ? CORES_SALA[idx % CORES_SALA.length] : 'bg-slate-100 border-slate-300';
@@ -408,8 +426,37 @@ export function AgendaPage() {
   return (
     <div className="space-y-6">
       <PageHeader icon={Calendar} title="Agenda e Ocupação" subtitle="Mapa de ocupação semanal e controle de salas">
-        <Btn icon={Plus} onClick={() => abrirNovo()}>Novo Agendamento</Btn>
+        <div className="flex gap-2">
+          <Btn variant="secondary" icon={UserPlus} onClick={abrirNovoPaciente}>Cadastrar Paciente</Btn>
+          <Btn icon={Plus} onClick={() => abrirNovo()}>Novo Agendamento</Btn>
+        </div>
       </PageHeader>
+
+      {agsPendentesConfirmacao.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/60">
+          <div className="flex items-center gap-2 mb-3">
+            <CalendarCheck size={18} className="text-amber-600" />
+            <h3 className="font-bold text-amber-800 text-sm">
+              {agsPendentesConfirmacao.length} consulta{agsPendentesConfirmacao.length > 1 ? 's' : ''} nas próximas 24h ainda sem confirmação
+            </h3>
+          </div>
+          <div className="space-y-1.5">
+            {agsPendentesConfirmacao.map(ag => (
+              <div key={ag.id} className="flex items-center justify-between gap-3 bg-white border border-amber-100 rounded-lg px-3 py-2 text-sm">
+                <div className="min-w-0 flex items-center gap-3">
+                  <span className="font-bold text-slate-700 shrink-0">{fmtBR(new Date(ag.data_agendamento + 'T00:00:00'))} {ag.hora_inicio}</span>
+                  <span className="text-slate-600 truncate">{nomePaciente(ag.paciente_id)}</span>
+                  {nomeProf(ag.profissional_id) && <span className="text-slate-400 text-xs truncate hidden sm:inline">• {nomeProf(ag.profissional_id)}</span>}
+                </div>
+                <div className="flex gap-1.5 shrink-0">
+                  <Btn size="sm" onClick={() => confirmarAgendamento(ag.id)} className="bg-emerald-500 hover:bg-emerald-600 border-none text-white">Confirmar</Btn>
+                  <Btn size="sm" variant="ghost" icon={X} onClick={() => { if (confirm('Marcar este agendamento como cancelado (paciente não confirmou)?')) mudarStatusRapido(ag.id, 'Cancelado'); }}>Não confirmou</Btn>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card className="h-full flex flex-col">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-gray-100">
