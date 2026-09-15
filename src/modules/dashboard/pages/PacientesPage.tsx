@@ -486,6 +486,17 @@ export function PacientesPage() {
   // ── Memed: carrega o script uma vez ao abrir a aba de nova consulta ──
   useEffect(() => { if (perfilTab === 'nova_consulta') iniciarMemed(); }, [perfilTab, iniciarMemed]);
 
+  // Pré-carrega as alergias já registradas no cadastro do paciente como chips,
+  // pra ficarem visíveis (e editáveis) junto com as novas adicionadas nesta
+  // consulta — sem isso a lista sempre abria vazia, escondendo o que já
+  // estava salvo.
+  useEffect(() => {
+    if (perfilTab !== 'nova_consulta') return;
+    const existentes = (perfilAtivo?.alergias || '').split(',').map(s => s.trim()).filter(Boolean);
+    setAlergiasSelecionadas(existentes.map(nome => ({ id: nome, nome })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perfilTab, perfilAtivo?.id]);
+
   const abrirPrescricaoMemed = () => {
     const p = perfilAtivo;
     if (!p) return;
@@ -521,6 +532,18 @@ export function PacientesPage() {
           ...perfilAtivo,
           historico_cid: [...(perfilAtivo.historico_cid || []), cidSelecionado.codigo]
         });
+      }
+
+      // As alergias tagueadas aqui (via busca na Memed) viviam só no estado
+      // local da tela e eram descartadas ao salvar — nunca chegavam a ir pro
+      // cadastro do paciente. Persiste no campo alergias do paciente, que é
+      // o mesmo lido em "Alergias:" no perfil e no alerta do Prontuário.
+      if (perfilAtivo) {
+        const alergiasTexto = alergiasSelecionadas.map(a => a.nome).join(', ');
+        if (alergiasTexto !== (perfilAtivo.alergias || '')) {
+          await pacientesApi.atualizar(parseInt(perfilAtivo.id), { alergias: alergiasTexto || undefined });
+          setPerfilAtivo(prev => prev ? { ...prev, alergias: alergiasTexto } : prev);
+        }
       }
 
       setConsultaSalva(true);

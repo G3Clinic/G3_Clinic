@@ -42,6 +42,33 @@ export const pacienteStore = {
   clear: () => sessionStorage.removeItem(PACIENTE_KEY),
 };
 
+// Nomes de campo (o último segmento de "loc") em português, pros erros de
+// validação (422) do FastAPI/Pydantic ficarem legíveis pro usuário final.
+const NOME_CAMPO: Record<string, string> = {
+  data_nascimento: 'Data de nascimento', cpf: 'CPF', nome: 'Nome', email: 'E-mail',
+  telefone: 'Telefone', cep: 'CEP', uf: 'UF', carteirinha_validade: 'Validade da carteirinha',
+};
+
+// O `detail` de um erro do FastAPI é uma string nos HTTPException manuais, mas
+// vira uma LISTA de objetos {loc, msg, type} nos erros de validação (422) do
+// Pydantic — passar essa lista direto pra `new Error(...)` produz a mensagem
+// inútil "[object Object]" (visto em produção no cadastro de paciente).
+function extrairMensagemErro(detail: unknown, fallback: string): string {
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail.map(item => {
+      if (item && typeof item === 'object' && 'msg' in item) {
+        const loc = Array.isArray((item as { loc?: unknown[] }).loc) ? (item as { loc: unknown[] }).loc : [];
+        const campo = String(loc[loc.length - 1] ?? '');
+        const rotulo = NOME_CAMPO[campo] || campo;
+        return rotulo ? `${rotulo}: ${(item as { msg: string }).msg}` : String((item as { msg: string }).msg);
+      }
+      return typeof item === 'string' ? item : JSON.stringify(item);
+    }).join('; ');
+  }
+  return fallback;
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const token = tokenStore.get();
   const filial = filialStore.get();
@@ -58,7 +85,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   if (res.status === 401) {
     if (path.includes('/auth/login')) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || 'E-mail ou senha incorretos');
+      throw new Error(extrairMensagemErro(body.detail, 'E-mail ou senha incorretos'));
     }
     // Token ausente/expirado: limpa e manda para o login.
     tokenStore.clear();
@@ -70,7 +97,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     let msg = `Erro ${res.status}`;
     try {
       const body = await res.json();
-      msg = body.detail || msg;
+      msg = extrairMensagemErro(body.detail, msg);
     } catch {
       /* corpo não-JSON */
     }
