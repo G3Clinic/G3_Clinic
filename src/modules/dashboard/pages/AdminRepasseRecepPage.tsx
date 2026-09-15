@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, Plus, Edit2, Trash2, Save } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { DollarSign, Plus, Edit2, Trash2, Save, UserRound } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import { repasseRecepApi, usuariosApi, filialStore, type APIRepasseRecep, type APIUsuario } from '../../../services/api';
 
@@ -62,7 +62,10 @@ export function AdminRepasseRecepPage() {
     return `${MESES_PT[Number(mes) - 1] || mes}/${ano}`;
   };
 
-  const abrirNovo = () => { setEditId(null); setRecepId(''); setTipo(TIPOS[0]); setValor(''); setReferencia(''); setCompetencia(''); setStatus('Pendente'); setErro(''); setModal(true); };
+  const abrirNovo = (recepIdPreSelecionado?: string) => {
+    setEditId(null); setRecepId(recepIdPreSelecionado || ''); setTipo(TIPOS[0]);
+    setValor(''); setReferencia(''); setCompetencia(''); setStatus('Pendente'); setErro(''); setModal(true);
+  };
   const abrirEdit = (r: APIRepasseRecep) => {
     setEditId(r.id); setRecepId(r.recepcionista_id || ''); setTipo(r.tipo || TIPOS[0]);
     setValor(r.valor != null ? String(r.valor) : ''); setReferencia(r.referencia || '');
@@ -111,10 +114,30 @@ export function AdminRepasseRecepPage() {
   const totalPendente = listaComStatus.filter(r => r.status !== 'Pago').reduce((s, r) => s + (r.valor || 0), 0);
   const totalPago = listaComStatus.filter(r => r.status === 'Pago').reduce((s, r) => s + (r.valor || 0), 0);
 
+  // Agrupa por recepcionista pra deixar visível, de cara, quais e quantas regras
+  // cada uma já tem ativas — antes era uma lista corrida só e ficava difícil notar
+  // que uma mesma pessoa podia ter mais de uma regra combinada.
+  const grupos = useMemo(() => {
+    const porId = new Map<string, APIRepasseRecep[]>();
+    for (const r of lista) {
+      const id = r.recepcionista_id || '—';
+      if (!porId.has(id)) porId.set(id, []);
+      porId.get(id)!.push(r);
+    }
+    return Array.from(porId.entries())
+      .map(([id, regras]) => ({ id, nome: nomeRecep(id), regras }))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [lista, recepcionistas]);
+
+  // Regras de outra recepcionista que não a selecionada no modal, pra mostrar
+  // "o que ela já tem" antes de cadastrar mais uma (evita duplicar tipo sem querer
+  // e deixa claro que dá pra combinar quantas regras quiser).
+  const regrasDaRecepSelecionada = recepId ? lista.filter(r => r.recepcionista_id === recepId && r.id !== editId) : [];
+
   return (
     <div className="space-y-5">
       <PageHeader icon={DollarSign} title="Regras de Repasse" subtitle="Configure comissões para dentistas e recepcionistas">
-        <Btn icon={Plus} onClick={abrirNovo}>Novo Repasse</Btn>
+        <Btn icon={Plus} onClick={() => abrirNovo()}>Novo Repasse</Btn>
       </PageHeader>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -125,35 +148,55 @@ export function AdminRepasseRecepPage() {
 
       <Card>
         <h3 className="font-bold text-slate-700 text-sm mb-4">Lista de Repasses</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-gray-100">{['Recepcionista', 'Tipo de Repasse', 'Valor', 'Referência', 'Status', 'Ações'].map(h => <th key={h} className="text-left px-4 py-3 text-xs font-bold text-slate-400 uppercase tracking-wide">{h}</th>)}</tr></thead>
-            <tbody className="divide-y divide-gray-50">
-              {loading ? <tr><td colSpan={6} className="text-center py-8 text-slate-500">Carregando...</td></tr>
-                : lista.length === 0 ? <tr><td colSpan={6} className="text-center py-8 text-slate-500">Nenhum repasse cadastrado.</td></tr>
-                : lista.map(r => (
-                  <tr key={r.id} className="hover:bg-slate-50 group">
-                    <td className="px-4 py-3 text-slate-700">{nomeRecep(r.recepcionista_id)}</td>
-                    <td className="px-4 py-3 text-slate-500">{r.tipo}</td>
-                    <td className="px-4 py-3 font-bold text-slate-700">{r.tipo?.includes('Percentual') ? `${r.valor}%` : `R$ ${(r.valor ?? 0).toFixed(2)}`}</td>
-                    <td className="px-4 py-3 text-slate-500">{r.referencia || '-'}</td>
-                    <td className="px-4 py-3">
-                      {ehTaxa(r.tipo) ? (
-                        <Badge color="blue">Ativo</Badge>
-                      ) : (
-                        <Badge color={r.status === 'Pago' ? 'green' : 'yellow'}>{r.status}</Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3"><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {(!ehTaxa(r.tipo) && r.status !== 'Pago') && <button onClick={() => marcarPago(r)} className="px-2 py-1 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100">✓ Marcar Pago</button>}
-                      <button onClick={() => abrirEdit(r)} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-light rounded-lg"><Edit2 size={14} /></button>
-                      <button onClick={() => excluir(r)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
-                    </div></td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
+        <p className="text-xs text-slate-500 -mt-2 mb-4">Agrupado por recepcionista — cada uma pode ter várias regras combinadas ao mesmo tempo (ex.: uma "por Agendamento" + uma "por Atendimento").</p>
+        {loading ? (
+          <p className="text-center py-8 text-slate-500 text-sm">Carregando...</p>
+        ) : grupos.length === 0 ? (
+          <p className="text-center py-8 text-slate-500 text-sm">Nenhum repasse cadastrado.</p>
+        ) : (
+          <div className="space-y-5">
+            {grupos.map(g => (
+              <div key={g.id} className="border border-gray-100 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between bg-slate-50 px-4 py-2.5 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <UserRound size={15} className="text-slate-400" />
+                    <span className="font-bold text-slate-700 text-sm">{g.nome}</span>
+                    <Badge color="blue">{g.regras.length} regra{g.regras.length !== 1 ? 's' : ''}</Badge>
+                  </div>
+                  <button onClick={() => abrirNovo(g.id)} className="text-xs font-bold text-brand-primary hover:underline flex items-center gap-1">
+                    <Plus size={13} /> Nova regra pra ela
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-gray-100">{['Tipo de Repasse', 'Valor', 'Referência', 'Status', 'Ações'].map(h => <th key={h} className="text-left px-4 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-wide">{h}</th>)}</tr></thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {g.regras.map(r => (
+                        <tr key={r.id} className="hover:bg-slate-50 group">
+                          <td className="px-4 py-2.5 text-slate-600">{r.tipo}</td>
+                          <td className="px-4 py-2.5 font-bold text-slate-700">{r.tipo?.includes('Percentual') ? `${r.valor}%` : `R$ ${(r.valor ?? 0).toFixed(2)}`}</td>
+                          <td className="px-4 py-2.5 text-slate-500">{r.referencia || '-'}</td>
+                          <td className="px-4 py-2.5">
+                            {ehTaxa(r.tipo) ? (
+                              <Badge color="blue">Ativo</Badge>
+                            ) : (
+                              <Badge color={r.status === 'Pago' ? 'green' : 'yellow'}>{r.status}</Badge>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5"><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {(!ehTaxa(r.tipo) && r.status !== 'Pago') && <button onClick={() => marcarPago(r)} className="px-2 py-1 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100">✓ Marcar Pago</button>}
+                            <button onClick={() => abrirEdit(r)} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-light rounded-lg"><Edit2 size={14} /></button>
+                            <button onClick={() => excluir(r)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
+                          </div></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Modal open={modal} onClose={() => setModal(false)} title={editId ? 'Editar Repasse' : 'Novo Repasse'}>
@@ -162,6 +205,19 @@ export function AdminRepasseRecepPage() {
             <option value="">Selecione</option>
             {recepcionistas.map(r => <option key={r.id} value={r.id}>{r.nome}</option>)}
           </SelectField>
+          {regrasDaRecepSelecionada.length > 0 && (
+            <div className="bg-slate-50 border border-gray-100 rounded-xl p-3">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Regras que ela já tem ({regrasDaRecepSelecionada.length}) — esta será somada às demais</p>
+              <ul className="space-y-1">
+                {regrasDaRecepSelecionada.map(r => (
+                  <li key={r.id} className="text-xs text-slate-600 flex justify-between">
+                    <span>{r.tipo}</span>
+                    <span className="font-bold">{r.tipo?.includes('Percentual') ? `${r.valor}%` : `R$ ${(r.valor ?? 0).toFixed(2)}`}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <SelectField label="Tipo de Repasse" required value={tipo} onChange={e => setTipo(e.target.value)}>
             {TIPOS.map(t => <option key={t}>{t}</option>)}
           </SelectField>
