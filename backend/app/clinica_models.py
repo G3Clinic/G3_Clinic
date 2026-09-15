@@ -364,6 +364,11 @@ class CaixaLancamento(Base, TenantMixin):
     # de SAÍDA gerado aponta de volta pra ela via estorno_de_id (auditoria).
     estornado = Column(Boolean, default=False)
     estorno_de_id = Column(String, nullable=True)
+    # Liga um repasse (SAÍDA de comissão médica/recepção) à ENTRADA que o
+    # originou — sem isso, estornar o pagamento não tinha como encontrar e
+    # reverter a comissão que foi paga em cima dele (pedido: "se estornado,
+    # retirar comissão do atendimento").
+    origem_entrada_id = Column(String, nullable=True)
 
 
 class FinanceiroContaPagar(Base, TenantMixin):

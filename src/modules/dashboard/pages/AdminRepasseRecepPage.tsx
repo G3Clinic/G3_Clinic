@@ -3,7 +3,24 @@ import { DollarSign, Plus, Edit2, Trash2, Save } from 'lucide-react';
 import { PageHeader, Card, Btn, Badge, Modal, InputField, SelectField } from '../../../components/ui/shared';
 import { repasseRecepApi, usuariosApi, filialStore, type APIRepasseRecep, type APIUsuario } from '../../../services/api';
 
-const TIPOS = ['Percentual por Consulta', 'Valor Fixo Mensal', 'Valor Fixo por Consulta'];
+// 5 tipos de regra, todos combináveis entre si (uma recepcionista pode ter
+// quantas quiser ativas ao mesmo tempo — ver _processar_repasse_recepcao e
+// _processar_repasse_agendamento no backend):
+//  • "por Agendamento": paga na hora em que ELA cria o agendamento, não
+//    depende de pagamento nenhum — recompensa o ato de agendar.
+//  • "por Atendimento": só é lançada quando o atendimento é efetivamente PAGO
+//    (o backend só chama essa regra a partir de um pagamento real no caixa);
+//    se o pagamento for estornado depois, a comissão é revertida junto.
+//  • "Mensal": lançamento fixo do mês, com competência própria.
+const TIPOS = [
+  'Percentual por Atendimento', 'Valor Fixo por Atendimento',
+  'Percentual por Agendamento', 'Valor Fixo por Agendamento',
+  'Valor Fixo Mensal',
+];
+// Tipos "taxa" (aplicados automaticamente por evento, sem status Pendente/Pago
+// nem competência própria) — inclui o nome legado "por Consulta" só pra
+// continuar reconhecendo regras já cadastradas antes dessa mudança.
+const ehTaxa = (tipo?: string | null) => !!tipo && (tipo.includes('por Atendimento') || tipo.includes('por Agendamento') || tipo.includes('por Consulta'));
 
 export function AdminRepasseRecepPage() {
   const [lista, setLista] = useState<APIRepasseRecep[]>([]);
@@ -68,16 +85,17 @@ export function AdminRepasseRecepPage() {
     if (ehMensal && !competencia) { setErro('Informe a competência (mês) deste repasse fixo mensal.'); return; }
     setSalvando(true);
     try {
-      // "por Consulta" (Percentual/Fixo) é uma regra de taxa, não um lançamento — não tem
-      // status de pagamento nem competência: o valor é aplicado direto quando o paciente paga
-      // a consulta (ver cálculo em Relatórios). Só "Valor Fixo Mensal" é um lançamento do mês,
-      // por isso é o único tipo com Pendente/Pago e competência de verdade.
+      // "por Agendamento"/"por Atendimento" (Percentual/Fixo) são regras de taxa, não um
+      // lançamento — não têm status de pagamento nem competência: o valor é aplicado
+      // direto pelo backend quando o evento acontece (agendar ou pagar, ver cálculo em
+      // Relatórios). Só "Valor Fixo Mensal" é um lançamento do mês, por isso é o único
+      // tipo com Pendente/Pago e competência de verdade.
       const payload = {
         recepcionista_id: recepId, unidade_id: Number(unidadeAtiva), tipo,
         valor: valor ? Number(valor) : undefined,
         referencia: referencia.trim() || (ehMensal ? fmtCompetencia(competencia) : undefined),
         competencia: ehMensal ? `${competencia}-01` : undefined,
-        status: tipo.includes('por Consulta') ? undefined : status,
+        status: ehTaxa(tipo) ? undefined : status,
       };
       if (editId) await repasseRecepApi.atualizar(editId, payload); else await repasseRecepApi.criar(payload);
       setModal(false); carregar();
@@ -87,9 +105,9 @@ export function AdminRepasseRecepPage() {
   const marcarPago = async (r: APIRepasseRecep) => { await repasseRecepApi.atualizar(r.id, { status: 'Pago' }); carregar(); };
   const excluir = async (r: APIRepasseRecep) => { if (confirm('Excluir este repasse?')) { await repasseRecepApi.excluir(r.id); carregar(); } };
 
-  // Regras "por Consulta" ficam fora dessas somas — não são valores pendentes/pagos, são
-  // taxas (% ou R$ por atendimento); somar entraria % junto com R$ na mesma conta.
-  const listaComStatus = lista.filter(r => !r.tipo?.includes('por Consulta'));
+  // Regras "por Agendamento"/"por Atendimento" ficam fora dessas somas — não são valores
+  // pendentes/pagos, são taxas (% ou R$ por evento); somar entraria % junto com R$ na mesma conta.
+  const listaComStatus = lista.filter(r => !ehTaxa(r.tipo));
   const totalPendente = listaComStatus.filter(r => r.status !== 'Pago').reduce((s, r) => s + (r.valor || 0), 0);
   const totalPago = listaComStatus.filter(r => r.status === 'Pago').reduce((s, r) => s + (r.valor || 0), 0);
 
@@ -120,14 +138,14 @@ export function AdminRepasseRecepPage() {
                     <td className="px-4 py-3 font-bold text-slate-700">{r.tipo?.includes('Percentual') ? `${r.valor}%` : `R$ ${(r.valor ?? 0).toFixed(2)}`}</td>
                     <td className="px-4 py-3 text-slate-500">{r.referencia || '-'}</td>
                     <td className="px-4 py-3">
-                      {r.tipo?.includes('por Consulta') ? (
+                      {ehTaxa(r.tipo) ? (
                         <Badge color="blue">Ativo</Badge>
                       ) : (
                         <Badge color={r.status === 'Pago' ? 'green' : 'yellow'}>{r.status}</Badge>
                       )}
                     </td>
                     <td className="px-4 py-3"><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {(!r.tipo?.includes('por Consulta') && r.status !== 'Pago') && <button onClick={() => marcarPago(r)} className="px-2 py-1 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100">✓ Marcar Pago</button>}
+                      {(!ehTaxa(r.tipo) && r.status !== 'Pago') && <button onClick={() => marcarPago(r)} className="px-2 py-1 text-xs bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100">✓ Marcar Pago</button>}
                       <button onClick={() => abrirEdit(r)} className="p-1.5 text-slate-400 hover:text-brand-primary hover:bg-brand-light rounded-lg"><Edit2 size={14} /></button>
                       <button onClick={() => excluir(r)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
                     </div></td>
@@ -147,13 +165,20 @@ export function AdminRepasseRecepPage() {
           <SelectField label="Tipo de Repasse" required value={tipo} onChange={e => setTipo(e.target.value)}>
             {TIPOS.map(t => <option key={t}>{t}</option>)}
           </SelectField>
+          <p className="text-[11px] text-slate-500 -mt-2">
+            {tipo.includes('por Agendamento')
+              ? 'Paga assim que ela cria o agendamento — independe de o paciente comparecer ou pagar.'
+              : tipo.includes('por Atendimento') || tipo.includes('por Consulta')
+                ? 'Só é paga quando o atendimento é efetivamente recebido no caixa; se o pagamento for estornado, a comissão é revertida junto.'
+                : 'Lançamento fixo do mês, independente de agendamentos ou atendimentos.'}
+          </p>
           <InputField label="Valor (% ou R$)" type="number" step="0.01" placeholder="Ex: 5 ou 800.00" value={valor} onChange={e => setValor(e.target.value)} />
           {tipo === 'Valor Fixo Mensal' ? (
             <InputField label="Competência (mês a que se refere)" type="month" required value={competencia} onChange={e => setCompetencia(e.target.value)} />
           ) : (
             <InputField label="Referência (opcional)" placeholder="Ex: a partir de Julho/2025" value={referencia} onChange={e => setReferencia(e.target.value)} />
           )}
-          {!tipo?.includes('por Consulta') && (
+          {!ehTaxa(tipo) && (
             <SelectField label="Status" value={status} onChange={e => setStatus(e.target.value)}><option>Pendente</option><option>Pago</option></SelectField>
           )}
           {erro && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">{erro}</div>}

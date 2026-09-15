@@ -107,13 +107,24 @@ def _validar_agendamento(dados: dict, user, *, is_partial: bool = False) -> None
             raise HTTPException(status_code=400, detail="Sala é obrigatória para o agendamento.")
 
 
+# Encaminha pro _processar_repasse_agendamento definido mais abaixo — usado
+# como referência tardia (só resolvida quando o hook é chamado, não na
+# criação deste dict) porque a lógica de repasse depende de funções
+# auxiliares definidas depois deste ponto no arquivo.
+def _after_create_agendamento(obj, user, db):
+    _processar_repasse_agendamento(obj, user, db)
+
+
 _HOOKS_POR_PREFIXO = {
+    "agendamentos": dict(
+        validate=_validar_agendamento,
+        after_create=_after_create_agendamento,
+    ),
     "modelos_prontuario": dict(
         extra_filter=_filtro_modelos_prontuario,
         before_create=_before_create_modelo_prontuario,
         check_write=_check_write_modelo_prontuario,
     ),
-    "agendamentos": dict(validate=_validar_agendamento),
 }
 
 # CRUD completo, multi-tenant e protegido por módulo, de todas as tabelas.
@@ -443,48 +454,57 @@ def _valor_do_agendamento(db: Session, ag, empresa_id: int) -> float:
     return float(valor or 0)
 
 
-def _processar_repasse_medico(db: Session, user, ag_id, valor, nome_pac, forma_pagamento):
-    """Verifica se o agendamento tem repasse e lança uma SAÍDA no caixa do dia."""
+def _processar_repasse_medico(db: Session, user, ag_id, valor, nome_pac, forma_pagamento, origem_entrada_id=None):
+    """Verifica se o agendamento tem repasse e lança uma SAÍDA no caixa do dia.
+    `origem_entrada_id` liga essa SAÍDA à ENTRADA (pagamento) que a originou, pra
+    dar pra reverter a comissão automaticamente se o pagamento for estornado
+    depois (ver estornar_lancamento_caixa)."""
     ag = db.query(clinica_models.Agendamento).filter(clinica_models.Agendamento.id == ag_id).first()
     if not ag or not ag.profissional_id or not ag.procedimento_id:
         return
-        
+
     proc = db.query(clinica_models.Procedimento).filter(clinica_models.Procedimento.id == ag.procedimento_id).first()
     if not proc:
         proc = db.query(clinica_models.OdontoProcedimento).filter(clinica_models.OdontoProcedimento.id == ag.procedimento_id).first()
-        
+
     if not proc:
         return
-        
+
     val_rep = proc.valor_repasse or 0
     tipo_rep = proc.tipo_repasse or "fixo"
-    
+
     repasse_final = 0
     if tipo_rep == "percentual":
         repasse_final = (valor or 0) * (val_rep / 100)
     else:
         repasse_final = val_rep
-        
+
     if repasse_final > 0:
         prof = db.query(clinica_models.PerfilUsuario).filter(clinica_models.PerfilUsuario.id == ag.profissional_id).first()
         nome_prof = prof.nome if prof else "Profissional"
-        
+
         saida = clinica_models.CaixaLancamento(
             empresa_id=user.empresa_id, unidade_id=ag.unidade_id, tipo="SAIDA",
-            descricao=f"Repasse Profissional - {nome_prof} ({nome_pac})", 
+            descricao=f"Repasse Profissional - {nome_prof} ({nome_pac})",
             paciente_id=ag.paciente_id, profissional_id=ag.profissional_id, valor=repasse_final,
             forma_pagamento=forma_pagamento, data=date.today(), criado_por=user.id,
+            origem_entrada_id=origem_entrada_id,
         )
         db.add(saida)
         db.flush()
 
-def _processar_repasse_recepcao(db: Session, user, ag_id, valor, nome_pac, forma_pagamento):
-    """Verifica se a recepcionista possui repasse por consulta e lança SAÍDA no caixa do dia.
-    Soma TODAS as regras "por Consulta" cadastradas pra essa recepcionista — uma
-    recepcionista pode ter mais de uma ativa ao mesmo tempo (ex.: percentual + fixo, ou
-    uma nova cadastrada sem excluir a antiga). Antes isto usava .first() sem nenhum
-    critério de ordenação, então com mais de uma regra cadastrada o sistema aplicava
-    uma delas arbitrariamente e ignorava as demais silenciosamente."""
+def _processar_repasse_recepcao(db: Session, user, ag_id, valor, nome_pac, forma_pagamento, origem_entrada_id=None):
+    """Verifica se a recepcionista possui repasse por atendimento e lança SAÍDA no
+    caixa do dia — só é chamada quando o pagamento é efetivamente registrado
+    (ver chamadas em finalizar_atendimento/baixar_recebimento), então "Percentual/
+    Valor Fixo por Atendimento" já nasce condicionado ao pagamento ter entrado no
+    caixa. `origem_entrada_id` liga a SAÍDA à ENTRADA, pra reverter se estornada.
+
+    Soma TODAS as regras "por Atendimento" cadastradas pra essa recepcionista —
+    uma recepcionista pode ter mais de uma ativa ao mesmo tempo (ex.: percentual +
+    fixo, ou uma nova cadastrada sem excluir a antiga). Mantém compatibilidade com
+    o nome antigo "por Consulta" pros repasses já cadastrados antes dessa mudança.
+    """
     ag = db.query(clinica_models.Agendamento).filter(clinica_models.Agendamento.id == ag_id).first()
     if not ag or not ag.criado_por:
         return
@@ -498,8 +518,8 @@ def _processar_repasse_recepcao(db: Session, user, ag_id, valor, nome_pac, forma
         if not rep.valor:
             continue
         tipo = rep.tipo or ""
-        if "por Consulta" not in tipo:
-            continue  # "Valor Fixo Mensal" não é disparado por consulta.
+        if "por Atendimento" not in tipo and "por Consulta" not in tipo:
+            continue  # "por Agendamento" (paga na hora de agendar) e "Valor Fixo Mensal" não entram aqui.
         if "Percentual" in tipo:
             repasse_final += (valor or 0) * (rep.valor / 100.0)
         elif "Fixo" in tipo:
@@ -510,11 +530,44 @@ def _processar_repasse_recepcao(db: Session, user, ag_id, valor, nome_pac, forma
         nome_recep = prof_recep.nome if prof_recep else "Recepção"
         saida = clinica_models.CaixaLancamento(
             empresa_id=user.empresa_id, unidade_id=ag.unidade_id, tipo="SAIDA",
-            descricao=f"Comissão Recepção - {nome_recep} ({nome_pac})", 
+            descricao=f"Comissão Recepção - {nome_recep} ({nome_pac})",
             paciente_id=ag.paciente_id, profissional_id=ag.criado_por, valor=repasse_final,
             forma_pagamento=forma_pagamento, data=date.today(), criado_por=user.id,
+            origem_entrada_id=origem_entrada_id,
         )
         db.add(saida)
+        db.flush()
+
+
+def _processar_repasse_agendamento(ag, user, db: Session):
+    """Regras "Percentual/Valor Fixo por Agendamento": ao contrário de "por
+    Atendimento", pagam pela AÇÃO de agendar, não pelo pagamento da consulta —
+    por isso são lançadas na hora da criação do agendamento, sem depender de
+    caixa/pagamento nenhum (e por isso também não são revertidas em estorno de
+    pagamento — não têm relação com ele)."""
+    if not ag or not ag.criado_por:
+        return
+    regras = db.query(clinica_models.RepasseRecepcionista).filter(
+        clinica_models.RepasseRecepcionista.recepcionista_id == ag.criado_por
+    ).all()
+    valor_ref = _valor_do_agendamento(db, ag, user.empresa_id)
+    repasse_final = 0.0
+    for rep in regras:
+        if not rep.valor or "por Agendamento" not in (rep.tipo or ""):
+            continue
+        if "Percentual" in rep.tipo:
+            repasse_final += (valor_ref or 0) * (rep.valor / 100.0)
+        elif "Fixo" in rep.tipo:
+            repasse_final += rep.valor
+    if repasse_final > 0:
+        prof_recep = db.query(clinica_models.PerfilUsuario).filter(clinica_models.PerfilUsuario.id == ag.criado_por).first()
+        nome_recep = prof_recep.nome if prof_recep else "Recepção"
+        db.add(clinica_models.CaixaLancamento(
+            empresa_id=user.empresa_id, unidade_id=ag.unidade_id, tipo="SAIDA",
+            descricao=f"Comissão Recepção (agendamento) - {nome_recep}",
+            paciente_id=ag.paciente_id, profissional_id=ag.criado_por, valor=repasse_final,
+            data=date.today(), criado_por=user.id,
+        ))
         db.flush()
 
 
@@ -638,8 +691,8 @@ def finalizar_atendimento(
                                     paciente_id=ag.paciente_id, forma_pagamento=pago.forma_pagamento,
                                     descricao=f"Atendimento pago - {nome_pac}", profissional_id=ag.profissional_id)
             lancamento_id = lanc.id
-            _processar_repasse_medico(db, user, ag.id, valor, nome_pac, pago.forma_pagamento)
-            _processar_repasse_recepcao(db, user, ag.id, valor, nome_pac, pago.forma_pagamento)
+            _processar_repasse_medico(db, user, ag.id, valor, nome_pac, pago.forma_pagamento, origem_entrada_id=lanc.id)
+            _processar_repasse_recepcao(db, user, ag.id, valor, nome_pac, pago.forma_pagamento, origem_entrada_id=lanc.id)
             registrar_evento(db, user, "finalização", "recepcao", "agendamentos", ag.id,
                              f'Finalizou atendimento de "{nome_pac}" (pago) — R$ {valor:.2f} no caixa')
         else:
@@ -701,8 +754,8 @@ def baixar_recebimento(
                             descricao=f"Pagamento — {nome_pac}", profissional_id=ag.profissional_id if ag else None)
     
     if rec.agendamento_id:
-        _processar_repasse_medico(db, user, rec.agendamento_id, rec.valor, nome_pac, forma)
-        _processar_repasse_recepcao(db, user, rec.agendamento_id, rec.valor, nome_pac, forma)
+        _processar_repasse_medico(db, user, rec.agendamento_id, rec.valor, nome_pac, forma, origem_entrada_id=lanc.id)
+        _processar_repasse_recepcao(db, user, rec.agendamento_id, rec.valor, nome_pac, forma, origem_entrada_id=lanc.id)
         
     registrar_evento(db, user, "alteração", "caixa", "recebimentos", rec.id,
                      f'Baixa de pagamento — R$ {(rec.valor or 0):.2f} ({nome_pac})')
@@ -800,9 +853,37 @@ def estornar_lancamento_caixa(
     db.add(contra)
     registrar_evento(db, user, "alteração", "caixa", "caixa_lancamentos", original.id,
                      f'Estornou lançamento "{original.descricao}" (R$ {(original.valor or 0):.2f})')
+
+    # Repasse de profissional / comissão de recepção pagos em cima deste
+    # pagamento também precisam ser revertidos — senão a clínica continua de
+    # fato pagando uma comissão sobre um dinheiro que não recebeu mais
+    # (pedido: "se estornado, retirar comissão do atendimento").
+    repasses_ligados = db.query(clinica_models.CaixaLancamento).filter(
+        clinica_models.CaixaLancamento.empresa_id == user.empresa_id,
+        clinica_models.CaixaLancamento.origem_entrada_id == original.id,
+        clinica_models.CaixaLancamento.estornado.is_(False),
+    ).all()
+    comissoes_estornadas_ids = []
+    for rep in repasses_ligados:
+        rep.estornado = True
+        contra_rep = clinica_models.CaixaLancamento(
+            empresa_id=user.empresa_id, unidade_id=rep.unidade_id, tipo="ENTRADA",
+            descricao=f"Estorno de comissão — {rep.descricao or 'repasse'}", paciente_id=rep.paciente_id,
+            profissional_id=rep.profissional_id, valor=rep.valor, forma_pagamento=rep.forma_pagamento,
+            data=date.today(), criado_por=user.id, estorno_de_id=rep.id,
+        )
+        db.add(contra_rep)
+        comissoes_estornadas_ids.append(rep.id)
+    if comissoes_estornadas_ids:
+        registrar_evento(db, user, "alteração", "caixa", "caixa_lancamentos", original.id,
+                         f'Estorno de pagamento reverteu {len(comissoes_estornadas_ids)} comissão(ões) associada(s)')
+
     db.commit()
     db.refresh(contra)
-    return {"ok": True, "lancamento_estornado_id": original.id, "contra_lancamento_id": contra.id}
+    return {
+        "ok": True, "lancamento_estornado_id": original.id, "contra_lancamento_id": contra.id,
+        "comissoes_estornadas": comissoes_estornadas_ids,
+    }
 
 
 # --- Backup: exporta os dados da empresa (JSON) ---

@@ -28,6 +28,12 @@ para os demais ~40 modelos que usam o CRUD genérico puro):
                                                      updates que não tocam no campo da regra).
   check_write(obj, user)                        -> levanta HTTPException(403) se o usuário
                                                      não pode alterar/excluir aquele registro
+  after_create(obj, user, db)                   -> roda depois do commit/refresh do create,
+                                                     pra side-effects que dependem do registro já
+                                                     ter id/valores definitivos (ex.: lançar
+                                                     comissão de recepção ao criar agendamento).
+                                                     Erros aqui não devem impedir a resposta —
+                                                     o hook decide se comita algo extra sozinho.
 """
 from datetime import date, datetime
 from typing import Any, Callable, Optional
@@ -102,6 +108,7 @@ def make_crud_router(
     before_create: Optional[Callable[[dict, Any], dict]] = None,
     validate: Optional[Callable[[dict, Any], None]] = None,
     check_write: Optional[Callable[[Any, Any], None]] = None,
+    after_create: Optional[Callable[[Any, Any, Session], None]] = None,
 ) -> APIRouter:
     router = APIRouter(prefix=f"/api/{prefix}", tags=[prefix])
     columns = {c.name for c in model.__table__.columns}
@@ -182,6 +189,12 @@ def make_crud_router(
         db.add(obj)
         db.commit()
         db.refresh(obj)
+        if after_create is not None:
+            try:
+                after_create(obj, user, db)
+                db.commit()
+            except Exception:
+                db.rollback()
         return _row_to_dict(obj)
 
     @router.put("/{item_id}")

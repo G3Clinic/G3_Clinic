@@ -151,15 +151,21 @@ export function RelatoriosPage() {
   const finalizadosF = agsF.filter(a => a.status === 'Finalizado');
   const totalRepasses = finalizadosF.reduce((s, a) => s + repasseDe(a), 0);
   
-  // Comissão das Recepcionistas — 3 tipos possíveis (Regras de Repasse):
-  //  • "Percentual por Consulta": % sobre o valor cobrado de cada consulta que ELA agendou.
-  //  • "Valor Fixo por Consulta": R$ fixo × nº de consultas que ela agendou.
+  // Comissão das Recepcionistas — 5 tipos possíveis (Regras de Repasse):
+  //  • "Percentual/Valor Fixo por Agendamento": paga pelo ATO de agendar — conta todo
+  //    agendamento que ela criou no período, não importa se foi atendido ou pago.
+  //  • "Percentual/Valor Fixo por Atendimento" (nome antigo: "por Consulta"): só conta
+  //    atendimentos FINALIZADOS que também tiveram um pagamento de fato recebido no
+  //    período — agendar ou finalizar sozinho não basta, precisa ter entrado dinheiro no
+  //    caixa (mesma regra que o backend aplica pro lançamento automático da comissão: se o
+  //    pagamento for estornado depois, o lançamento real é revertido lá; aqui, sem entrada
+  //    RECEBIDA no período, a consulta simplesmente não entra na conta).
   //  • "Valor Fixo Mensal": lançamento do mês (tem competência própria).
   // "quem agendou" vem de criado_por (gravado no momento da criação em Agenda — agendamentos
-  // antigos, de antes dessa gravação existir, não têm criado_por e por isso não entram nas
-  // regras "por Consulta": não sabemos de quem foram, e ATRIBUIR PRA TODO MUNDO — como o
-  // código fazia antes — inflava a comissão de cada recepcionista com o total de TODA a
-  // clínica. Preferível subcontar (e o dono perceber e corrigir manualmente) a inflar.
+  // antigos, de antes dessa gravação existir, não têm criado_por e por isso não entram em
+  // nenhuma das duas regras por evento: não sabemos de quem foram, e ATRIBUIR PRA TODO MUNDO
+  // — como o código fazia antes — inflava a comissão de cada recepcionista com o total de
+  // TODA a clínica. Preferível subcontar (e o dono perceber e corrigir manualmente) a inflar.
   //
   // Bug corrigido aqui: "Valor Fixo Mensal" estava sendo somado por inteiro em QUALQUER
   // período selecionado (Hoje, 7 dias, mês atual...), porque nunca tinha filtro de data —
@@ -173,15 +179,29 @@ export function RelatoriosPage() {
     const tipo = r.tipo || '';
     const valor = r.valor || 0;
     const nomeR = nomeUsuario(r.recepcionista_id);
-    if (tipo.includes('por Consulta')) {
-      const doRecep = finalizadosF.filter(a => a.criado_por && a.criado_por === r.recepcionista_id);
+    if (tipo.includes('por Agendamento')) {
+      const doRecep = agsF.filter(a => a.criado_por && a.criado_por === r.recepcionista_id);
       const calc = tipo.includes('Percentual')
         ? doRecep.reduce((s, a) => s + (a.valor_cobrado || 0) * (valor / 100), 0)
         : doRecep.length * valor;
       totalComissaoRecep += calc;
       comissoesDetalhe.push({
         recepcionista: nomeR, tipo,
-        base: tipo.includes('Percentual') ? `${valor}% × ${doRecep.length} consulta(s) agendada(s) por ela` : `R$ ${valor.toFixed(2)} × ${doRecep.length} consulta(s) agendada(s) por ela`,
+        base: tipo.includes('Percentual') ? `${valor}% × ${doRecep.length} agendamento(s) criado(s) por ela` : `R$ ${valor.toFixed(2)} × ${doRecep.length} agendamento(s) criado(s) por ela`,
+        valorCalculado: calc, incluida: true,
+      });
+    } else if (tipo.includes('por Atendimento') || tipo.includes('por Consulta')) {
+      const doRecep = finalizadosF.filter(a =>
+        a.criado_por && a.criado_por === r.recepcionista_id &&
+        recsF.some(rec => rec.agendamento_id === a.id)
+      );
+      const calc = tipo.includes('Percentual')
+        ? doRecep.reduce((s, a) => s + (a.valor_cobrado || 0) * (valor / 100), 0)
+        : doRecep.length * valor;
+      totalComissaoRecep += calc;
+      comissoesDetalhe.push({
+        recepcionista: nomeR, tipo,
+        base: tipo.includes('Percentual') ? `${valor}% × ${doRecep.length} atendimento(s) pago(s), agendado(s) por ela` : `R$ ${valor.toFixed(2)} × ${doRecep.length} atendimento(s) pago(s), agendado(s) por ela`,
         valorCalculado: calc, incluida: true,
       });
     } else {
@@ -717,7 +737,7 @@ export function RelatoriosPage() {
                 <tfoot><tr className="border-t border-gray-200"><td colSpan={3} className="px-3 py-2 font-bold text-slate-800">Total (só as incluídas)</td><td className="px-3 py-2 text-right font-bold text-purple-700">{brl(totalComissaoRecep)}</td><td /></tr></tfoot>
               )}
             </table>
-            <p className="text-[11px] text-slate-400 mt-3">Regras "por Consulta" contam atendimentos finalizados agendados pela própria recepcionista (só funciona pra agendamentos criados depois que esse rastreio foi implementado). Regras "Valor Fixo Mensal" só entram se a competência cadastrada cair dentro do período do relatório.</p>
+            <p className="text-[11px] text-slate-400 mt-3">Regras "por Agendamento" contam todo agendamento criado pela própria recepcionista no período. Regras "por Atendimento" só contam os que, além de finalizados, tiveram pagamento efetivamente recebido no período (só funciona pra agendamentos criados depois que esse rastreio foi implementado). Regras "Valor Fixo Mensal" só entram se a competência cadastrada cair dentro do período do relatório.</p>
           </div>
         )}
 
